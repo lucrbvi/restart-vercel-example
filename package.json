@@ -1,0 +1,21 @@
+{
+  "name": "bun-react-template",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently 'bun --hot src/server/index.tsx' 'bunx @tailwindcss/cli -i ./src/styles.css -o ./public/styles.css --minify --watch'",
+    "build": "bun run build.ts"
+  },
+  "dependencies": {
+    "bun-plugin-tailwind": "^0.0.15",
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.12",
+    "@types/bun": "latest",
+    "@types/react": "^19",
+    "@types/react-dom": "^19"
+  }
+}
