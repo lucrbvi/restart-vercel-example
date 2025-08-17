@@ -1,8 +1,31 @@
 // SERVER CODE
 
+/**
+ * This server is used as a *dev* server.
+ * You can also use it as a production server like a good old consistant server.
+ */
+
 import { serve, file } from "bun"
 import { renderToReadableStream } from "react-dom/server"
 import { App } from "app/App"
+import { publicProcedure, router } from './trpc'
+import { z } from "zod"
+import {createBunServeHandler} from 'trpc-bun-adapter'
+
+// tRPC section
+
+const appRouter = router({
+  getName: publicProcedure
+    .input(z.string())
+    .query(async (opts: any) => {
+      const { input } = opts
+      return `Hello ${input}`
+    })
+})
+
+export type AppRouter = typeof appRouter
+
+// server section
 
 function Body() {
   return (
@@ -17,7 +40,11 @@ function Body() {
         <div id="root">
           <App />
         </div>
-        <script src="/entrypoint.js" type="module"/>
+        <script
+          type="module"
+          src="/entrypoint.js"
+          crossOrigin="anonymous"
+        ></script>
       </body>
     </html>
   )
@@ -26,10 +53,11 @@ function Body() {
 console.log("Building client...")
 try{
   await Bun.build({
-    entrypoints: ['./src/client/entrypoint.tsx'],
+    entrypoints: ['./app/entrypoint.tsx'],
     outdir: './dist',
     target: 'browser',
     format: 'esm',
+    minify: true,
   })
   console.log("Client builded")
 } catch (e) {
@@ -37,15 +65,21 @@ try{
   process.exit(1)
 }
 
-
 const server = serve({
-  async fetch(req) {
+  port: 3000,
+  async fetch(req, res) {
     const path = new URL(req.url).pathname
+    
+    if (req.method === "OPTIONS" && path.startsWith("/trpc")) {
+      return new Response(null, {
+        status: 204,
+      })
+    }
 
     if (path === "/") {
       try {
         const stream = await renderToReadableStream(<Body/>, {
-          bootstrapScripts: ["/entrypoint.js"]
+          
         })
         return new Response(stream, {
           headers: { 
@@ -59,12 +93,19 @@ const server = serve({
       }
     }
 
-    if (path.endsWith(".css") || path.endsWith(".svg")) {
+    if (path.endsWith(".css")) {
+      const Filepath = path.split("/").pop()
+      const publicFile = file("dist/" + Filepath)
+      return new Response(publicFile, {
+        headers: { "Content-Type": "text/css"}
+      })
+    }
+
+    if (path.endsWith(".svg")) {
       const Filepath = path.split("/").pop()
       const publicFile = file("public/" + Filepath)
-      const endExtension = path.split(".")[1]
       return new Response(publicFile, {
-        headers: { "Content-Type": `text/${endExtension}`}
+        headers: { "Content-Type": "image/svg+xml"}
       })
     }
 
@@ -72,12 +113,34 @@ const server = serve({
       const Filepath = path.split("/").pop()
       const publicFile = file("dist/" + Filepath)
       return new Response(publicFile, {
-        headers: { "Content-Type": `application/javascript`}
+        headers: { "Content-Type": "application/javascript"}
       })
     }
 
     return new Response("Page not found (404)", { status: 404 })
   },
-});
+})
 
-console.log(`Listening on ${server.url}`)
+console.log(`✅ Web server online on ${server.url}`)
+
+const trpcServer = serve({
+    port: 3001,
+    ...createBunServeHandler({
+        router: appRouter,
+        responseMeta() {
+          return {
+            status: 200,
+            headers: {
+              "Access-Control-Allow-Origin": "http://localhost:3000",
+              "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+              "Access-Control-Allow-Headers": "Content-Type",
+              "Access-Control-Allow-Credentials": "true",
+            }
+          }
+        }
+      }
+    )
+  },
+)
+
+console.log(`✅ tRPC server online on ${trpcServer.url}`)
