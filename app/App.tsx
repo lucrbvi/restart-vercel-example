@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { trpc } from "./entrypoint"
+import { create } from 'zustand'
 
 function getBrowserName() {
     const userAgent = navigator.userAgent.toLowerCase();
@@ -15,14 +16,20 @@ function getBrowserName() {
     return 'Inconnu';
 }
 
+const useCount = create((set) => ({
+    count: 0,
+    inc: () => set((state) => ({ count: state.count +1 })),
+  }))
+
 export function App() {
-  const [count, setCount] = useState(0);
   const [greeting, setGreeting] = useState<string>("Loading...")
+  const { count, inc } = useCount()
 
   useEffect(() => {
+    console.log("useEffect")
     if (!trpc) return
 
-    trpc.getName.query(getBrowserName())
+    trpc.getName.query(getBrowserName(), { })
       .then((res) => setGreeting(res))
       .catch((err) => {
         console.error("tRPC error:", err)
@@ -35,7 +42,7 @@ export function App() {
       <h1>
         {greeting} — you have clicked {count} times!
       </h1>
-      <button onClick={() => setCount(count + 1)}>+</button>
+      <button onClick={inc}>+</button>
     </div>
   );
 }

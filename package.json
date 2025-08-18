@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently 'bun --hot ./server/index.tsx' 'bunx @tailwindcss/cli -i ./app/styles.css -o ./dist/styles.css --minify --watch'",
-    "build": "bun run build.ts"
+    "dev": "concurrently 'bunx @tailwindcss/cli -i ./app/styles.css -o ./dist/styles.css --minify --watch' 'bun --hot ./server/index.tsx --dev'",
+    "build": "bunx @tailwindcss/cli -i ./app/styles.css -o ./dist/styles.css --minify && bun run build.tsx",
+    "prod": "bunx @tailwindcss/cli -i ./app/styles.css -o ./dist/styles.css --minify && bun run build.tsx && bun run ./server/index.tsx --prod",
+    "prof:fast": "bun run ./server/index.tsx --prod"
   },
   "dependencies": {
     "bun-plugin-tailwind": "^0.0.15",
@@ -13,7 +15,8 @@
     "react": "^19",
     "react-dom": "^19",
     "trpc-bun-adapter": "^1.3.0",
-    "zod": "^4.0.17"
+    "zod": "^4.0.17",
+    "zustand": "^5.0.7"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.12",

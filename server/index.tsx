@@ -11,6 +11,7 @@ import { App } from "app/App"
 import { publicProcedure, router } from './trpc'
 import { z } from "zod"
 import {createBunServeHandler} from 'trpc-bun-adapter'
+import plugin from "bun-plugin-tailwind"
 
 // tRPC section
 
@@ -25,16 +26,34 @@ const appRouter = router({
 
 export type AppRouter = typeof appRouter
 
+type ServerFunctionSchema = {
+  name: z.string,
+  input: z.any,
+  query?: (...args: z.any[]) => z.any
+  mutation?: z.any
+}
+
+export function serverFunction(json: ServerFunctionSchema) {
+
+}
+
+serverFunction({
+  name: "a",
+  input: z.string(),
+  query: () => console.log("hi")
+})
+
 // server section
 
-function Body() {
+export function Body() {
   return (
     <html>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Bun + React</title>
+        <title>Restart</title>
         <link rel="stylesheet" href="/styles.css" />
+        <link rel="icon" type="image/svg+xml" href="/react.svg"></link>
       </head>
       <body>
         <div id="root">
@@ -50,97 +69,100 @@ function Body() {
   )
 }
 
-console.log("Building client...")
-try{
-  await Bun.build({
-    entrypoints: ['./app/entrypoint.tsx'],
-    outdir: './dist',
-    target: 'browser',
-    format: 'esm',
-    minify: true,
-  })
-  console.log("Client builded")
-} catch (e) {
-  console.error("Building error:", e)
-  process.exit(1)
-}
+if (import.meta.main) { // it stop the server to run if we import `Body()`
+  console.log("Building client...")
+  try{
+    await Bun.build({
+      entrypoints: ['./app/entrypoint.tsx'],
+      outdir: './dist',
+      plugins: [plugin],
+      target: 'browser',
+      format: 'esm',
+      minify: true,
+    })
+    console.log("Client builded")
+  } catch (e) {
+    console.error("Building error:", e)
+    process.exit(1)
+  }
 
-const server = serve({
-  port: 3000,
-  async fetch(req, res) {
-    const path = new URL(req.url).pathname
-    
-    if (req.method === "OPTIONS" && path.startsWith("/trpc")) {
-      return new Response(null, {
-        status: 204,
-      })
-    }
-
-    if (path === "/") {
-      try {
-        const stream = await renderToReadableStream(<Body/>, {
-          
+  const server = serve({
+    port: 3000,
+    async fetch(req, res) {
+      const path = new URL(req.url).pathname
+      
+      if (req.method === "OPTIONS" && path.startsWith("/trpc")) {
+        return new Response(null, {
+          status: 204,
         })
-        return new Response(stream, {
-          headers: { 
-            "Content-Type": "text/html",
-            "Cache-Control": "no-cache"
-           },
-        })
-      } catch (e) {
-        console.error("SSR error:", e)
-        return new Response("Server Error (500)", { status: 500 })
       }
-    }
 
-    if (path.endsWith(".css")) {
-      const Filepath = path.split("/").pop()
-      const publicFile = file("dist/" + Filepath)
-      return new Response(publicFile, {
-        headers: { "Content-Type": "text/css"}
-      })
-    }
+      if (path === "/") {
+        try {
+          const stream = await renderToReadableStream(<Body/>, {
+            
+          })
+          return new Response(stream, {
+            headers: { 
+              "Content-Type": "text/html",
+              "Cache-Control": "no-cache"
+            },
+          })
+        } catch (e) {
+          console.error("SSR error:", e)
+          return new Response("Server Error (500)", { status: 500 })
+        }
+      }
 
-    if (path.endsWith(".svg")) {
-      const Filepath = path.split("/").pop()
-      const publicFile = file("public/" + Filepath)
-      return new Response(publicFile, {
-        headers: { "Content-Type": "image/svg+xml"}
-      })
-    }
+      if (path.endsWith(".css")) {
+        const Filepath = path.split("/").pop()
+        const publicFile = file("dist/" + Filepath)
+        return new Response(publicFile, {
+          headers: { "Content-Type": "text/css"}
+        })
+      }
 
-    if (path.endsWith(".js")) {
-      const Filepath = path.split("/").pop()
-      const publicFile = file("dist/" + Filepath)
-      return new Response(publicFile, {
-        headers: { "Content-Type": "application/javascript"}
-      })
-    }
+      if (path.endsWith(".svg")) {
+        const Filepath = path.split("/").pop()
+        const publicFile = file("public/" + Filepath)
+        return new Response(publicFile, {
+          headers: { "Content-Type": "image/svg+xml"}
+        })
+      }
 
-    return new Response("Page not found (404)", { status: 404 })
-  },
-})
+      if (path.endsWith(".js")) {
+        const Filepath = path.split("/").pop()
+        const publicFile = file("dist/" + Filepath)
+        return new Response(publicFile, {
+          headers: { "Content-Type": "application/javascript"}
+        })
+      }
 
-console.log(`✅ Web server online on ${server.url}`)
+      return new Response("Page not found (404)", { status: 404 })
+    },
+  })
 
-const trpcServer = serve({
-    port: 3001,
-    ...createBunServeHandler({
-        router: appRouter,
-        responseMeta() {
-          return {
-            status: 200,
-            headers: {
-              "Access-Control-Allow-Origin": "http://localhost:3000",
-              "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-              "Access-Control-Allow-Headers": "Content-Type",
-              "Access-Control-Allow-Credentials": "true",
+  console.log(`✅ Web server online on ${server.url}`)
+
+  const trpcServer = serve({
+      port: 3001,
+      ...createBunServeHandler({
+          router: appRouter,
+          responseMeta() {
+            return {
+              status: 200,
+              headers: {
+                "Access-Control-Allow-Origin": "http://localhost:3000",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Allow-Credentials": "true",
+              }
             }
           }
         }
-      }
-    )
-  },
-)
+      )
+    },
+  )
 
-console.log(`✅ tRPC server online on ${trpcServer.url}`)
+  console.log(`✅ tRPC server online on ${trpcServer.url}`)
+}
