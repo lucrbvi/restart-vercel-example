@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "concurrently 'bunx @tailwindcss/cli -i ./app/styles.css -o ./dist/styles.css --minify --watch' 'bun --hot ./server/index.tsx --dev'",
     "build": "bunx @tailwindcss/cli -i ./app/styles.css -o ./dist/styles.css --minify && bun run build.tsx",
-    "prod": "bunx @tailwindcss/cli -i ./app/styles.css -o ./dist/styles.css --minify && bun run build.tsx && bun run ./server/index.tsx --prod",
-    "prof:fast": "bun run ./server/index.tsx --prod"
+    "prod": "bunx @tailwindcss/cli -i ./app/styles.css -o ./dist/styles.css --minify && bun run build.tsx && bun run ./server/index.tsx",
+    "static": "bun run ./server/index.tsx --static",
+    "prod:fast": "bun run ./server/index.tsx"
   },
   "dependencies": {
     "bun-plugin-tailwind": "^0.0.15",

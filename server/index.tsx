@@ -27,10 +27,10 @@ const appRouter = router({
 export type AppRouter = typeof appRouter
 
 type ServerFunctionSchema = {
-  name: z.string,
-  input: z.any,
-  query?: (...args: z.any[]) => z.any
-  mutation?: z.any
+  name: string,
+  input: any,
+  query?: (...args: any[]) => any
+  mutation?: any
 }
 
 export function serverFunction(json: ServerFunctionSchema) {
@@ -70,24 +70,48 @@ export function Body() {
 }
 
 if (import.meta.main) { // it stop the server to run if we import `Body()`
-  console.log("Building client...")
-  try{
-    await Bun.build({
-      entrypoints: ['./app/entrypoint.tsx'],
-      outdir: './dist',
-      plugins: [plugin],
-      target: 'browser',
-      format: 'esm',
-      minify: true,
-    })
-    console.log("Client builded")
-  } catch (e) {
-    console.error("Building error:", e)
-    process.exit(1)
+  const argv = Bun.argv.slice(2)
+  const isStaticMode = argv.includes("--static")
+  const isDevMode = argv.includes("--dev")
+  const mode = isStaticMode ? "static" : (isDevMode ? "dev" : "prod")
+
+  // Ensure environment hints for libraries that read NODE_ENV
+  try {
+    if (isDevMode) {
+      process.env.NODE_ENV = "development"
+    } else {
+      process.env.NODE_ENV = "production"
+    }
+  } catch {}
+
+  console.log(`Starting server in ${mode} mode`)
+
+  if (!isStaticMode) {
+    console.log("Building client...")
+    try{
+      await Bun.build({
+        entrypoints: ['./app/entrypoint.tsx'],
+        outdir: './dist',
+        plugins: [plugin],
+        target: 'browser',
+        format: 'esm',
+        minify: !isDevMode,
+        define: {
+          'process.env.NODE_ENV': JSON.stringify(isDevMode ? 'development' : 'production'),
+        },
+      })
+      console.log("Client builded")
+    } catch (e) {
+      console.error("Building error:", e)
+      process.exit(1)
+    }
+  } else {
+    console.log("Static mode: skipping client build")
   }
 
   const server = serve({
     port: 3000,
+    development: isDevMode,
     async fetch(req, res) {
       const path = new URL(req.url).pathname
       
@@ -99,19 +123,33 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
 
       if (path === "/") {
         try {
-          const stream = await renderToReadableStream(<Body/>, {
-            
-          })
+          if (isStaticMode) {
+            const html = file("dist/index.html")
+            return new Response(html, {
+              headers: {
+                "Content-Type": "text/html",
+              }
+            })
+          }
+          const stream = await renderToReadableStream(<Body/>, {})
           return new Response(stream, {
             headers: { 
               "Content-Type": "text/html",
-              "Cache-Control": "no-cache"
+              "Cache-Control": isDevMode ? "no-cache" : "public, max-age=0"
             },
           })
         } catch (e) {
           console.error("SSR error:", e)
           return new Response("Server Error (500)", { status: 500 })
         }
+      }
+
+      if (path.endsWith(".html")) {
+        const Filepath = path.split("/").pop()
+        const publicFile = file("dist/" + Filepath)
+        return new Response(publicFile, {
+          headers: { "Content-Type": "text/html"}
+        })
       }
 
       if (path.endsWith(".css")) {
@@ -144,25 +182,29 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
 
   console.log(`✅ Web server online on ${server.url}`)
 
-  const trpcServer = serve({
-      port: 3001,
-      ...createBunServeHandler({
-          router: appRouter,
-          responseMeta() {
-            return {
-              status: 200,
-              headers: {
-                "Access-Control-Allow-Origin": "http://localhost:3000",
-                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type",
-                "Access-Control-Allow-Credentials": "true",
+  if (!isStaticMode) {
+    const trpcServer = serve({
+        port: 3001,
+        ...createBunServeHandler({
+            router: appRouter,
+            responseMeta() {
+              return {
+                status: 200,
+                headers: {
+                  "Access-Control-Allow-Origin": "http://localhost:3000",
+                  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                  "Access-Control-Allow-Headers": "Content-Type",
+                  "Access-Control-Allow-Credentials": "true",
+                }
               }
             }
           }
-        }
-      )
-    },
-  )
+        )
+      },
+    )
 
-  console.log(`✅ tRPC server online on ${trpcServer.url}`)
+    console.log(`✅ tRPC server online on ${trpcServer.url}`)
+  } else {
+    console.log("Static mode: tRPC server disabled")
+  }
 }
