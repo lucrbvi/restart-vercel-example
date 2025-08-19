@@ -1,4 +1,4 @@
-import plugin from "bun-plugin-tailwind"
+import tailwindPlugin from "bun-plugin-tailwind"
 import { reactCompilerPlugin } from "./plugins/reactCompilerPlugin"
 import { restartSecurityPlugin } from "./plugins/restartSecurityPlugin"
 import { file, write } from "bun"
@@ -7,15 +7,27 @@ import { restartConfig } from "./restart.config"
 
 const entrypointPath = "./app/entrypoint.tsx" // change this if you want to make your own entrypoint script
 const outdirPath = "./dist"
+const stylesPath = "./app/styles.css"
 const entrypoint = file(entrypointPath)
 
+export async function buildCss(dev: boolean = false) {
+  Bun.spawn(["bunx", "@tailwindcss/cli", "-i", stylesPath, "-o", outdirPath + "/styles.css", dev ? "--watch" : "--minify"], {
+    stdio: ["inherit", "ignore", "ignore"],
+  })
+}
+
 export async function build() {
+  try {
+    await buildCss()
+  } catch (e) {
+    console.warn("CSS build failed:", e)
+  }
   await Bun.build({
     entrypoints: [entrypointPath],
     outdir: outdirPath,
     plugins: restartConfig.reactCompiler?.useReactCompiler
-      ? [plugin, restartSecurityPlugin(), reactCompilerPlugin()]
-      : [plugin, restartSecurityPlugin()],
+      ? [tailwindPlugin, restartSecurityPlugin, reactCompilerPlugin]
+      : [tailwindPlugin, restartSecurityPlugin],
     target: 'browser',
     format: 'esm',
     minify: true,

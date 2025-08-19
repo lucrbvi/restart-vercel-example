@@ -16,14 +16,15 @@ function getBrowserName() {
     return 'Unknown'
 }
 
-type CountState = { count: number; inc: () => void }
+type CountState = { count: number; inc: () => void; dec: () => void }
 const useCount = create<CountState>((set) => ({
   count: 0,
   inc: () => set((s) => ({ count: s.count + 1 })),
+  dec: () => set((s) => ({ count: s.count - 1 })),
 }))
 
 export function App() {
-  const { count, inc } = useCount()
+  const { count, inc, dec } = useCount()
   const [greeting, setGreeting] = useState<string>("Loading...")
 
   useEffect(() => {
@@ -40,7 +41,10 @@ export function App() {
       <h1>
         {greeting} — you have clicked {count} times!
       </h1>
-      <button onClick={inc}>+</button>
+      <div className="flex gap-4">
+        <button onClick={inc}>+</button>
+        <button onClick={dec}>-</button>
+      </div>
     </div>
   );
 }

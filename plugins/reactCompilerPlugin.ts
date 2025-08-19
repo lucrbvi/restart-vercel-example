@@ -2,7 +2,7 @@ import type { BunPlugin } from "bun"
 import * as babel from "@babel/core"
 import { restartConfig } from "../restart.config"
 
-export function reactCompilerPlugin(): BunPlugin {
+function reactCompilerPluginFn(): BunPlugin {
   return {
     name: "bun-plugin-react-compiler",
     setup(builder) {
@@ -32,3 +32,5 @@ export function reactCompilerPlugin(): BunPlugin {
     }
   }
 }
+
+export const reactCompilerPlugin = reactCompilerPluginFn()

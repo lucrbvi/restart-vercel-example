@@ -1,6 +1,7 @@
 import type { BunPlugin } from "bun"
 import * as babel from "@babel/core"
 import path from "path"
+import { restartConfig as buildRestartConfig } from "../restart.config"
 
 /**
  * This plugin removes server-only implementation details from client bundle by
@@ -8,7 +9,7 @@ import path from "path"
  * lightweight client stubs that call tRPC (`trpc[name][kind](arg)`).
  * It also removes middleware-related stuff.
  */
-export function restartSecurityPlugin(): BunPlugin {
+function restartSecurityPluginFn(): BunPlugin {
   return {
     name: "restart-security-plugin",
     setup(builder) {
@@ -20,8 +21,9 @@ export function restartSecurityPlugin(): BunPlugin {
         const source = await Bun.file(args.path).text()
 
         let middlewares: boolean = false
+        const usesConfig: boolean = source.includes("restart.config")
 
-        if (!source.includes("serverFunction") && !source.includes("newMiddleware") && !source.includes("middlewares")) {
+        if (!source.includes("serverFunction") && !source.includes("newMiddleware") && !source.includes("middlewares") && !usesConfig) {
           return
         }
 
@@ -43,6 +45,8 @@ export function restartSecurityPlugin(): BunPlugin {
               Program(programPath: any) {
                 const serverFunctionLocalNames = new Set<string>()
                 let transformedSomething = false
+                let configTouched = false
+                const configLocalNames: string[] = []
 
                 programPath.get("body").forEach((p: any) => {
                   if (!p.isImportDeclaration()) return
@@ -65,13 +69,122 @@ export function restartSecurityPlugin(): BunPlugin {
                   if (middlewares && src && /(^|\/)server\/middlewares$/.test(src)) {
                     p.remove()
                   }
+                  // Inline restart.config imports into constants
+                  if (src && /(^|\/)restart\.config(\.(t|j)sx?)?$/.test(src)) {
+                    // collect local names
+                    for (const s of p.node.specifiers) {
+                      if (t.isImportSpecifier(s)) {
+                        if (t.isIdentifier(s.imported) && s.imported.name === "restartConfig") {
+                          configLocalNames.push(s.local.name)
+                        }
+                      } else if (t.isImportDefaultSpecifier(s) || t.isImportNamespaceSpecifier(s)) {
+                        configLocalNames.push(s.local.name)
+                      }
+                    }
+                    p.remove()
+                  }
                 })
                 
-                if (serverFunctionLocalNames.size === 0 && !middlewares) {
+                if (serverFunctionLocalNames.size === 0 && !middlewares && configLocalNames.length === 0) {
                   return
                 }
 
+                // Helper to convert JS values to Babel AST literals
+                function literalFrom(value: any): any {
+                  if (value === null) return t.nullLiteral()
+                  if (typeof value === "string") return t.stringLiteral(value)
+                  if (typeof value === "number") return t.numericLiteral(value)
+                  if (typeof value === "boolean") return t.booleanLiteral(value)
+                  if (Array.isArray(value)) {
+                    return t.arrayExpression(value.map((v) => literalFrom(v)))
+                  }
+                  if (typeof value === "object") {
+                    const props = Object.entries(value).map(([k, v]) =>
+                      t.objectProperty(t.identifier(k), literalFrom(v))
+                    )
+                    return t.objectExpression(props)
+                  }
+                  // fallback: string
+                  return t.stringLiteral(String(value))
+                }
+                
+                function getAtPath(obj: any, keys: (string | number)[]) {
+                  let cur = obj
+                  for (const k of keys) {
+                    if (cur == null) return undefined
+                    cur = (cur as any)[k as any]
+                  }
+                  return cur
+                }
+
                 programPath.traverse({
+                  MemberExpression(memberPath: any) {
+                    // Inline restartConfig.xxx → literal
+                    let base = memberPath.node as any
+                    const keys: (string | number)[] = []
+                    // Build full chain a.b.c
+                    while (base && (base.type === "MemberExpression" || base.type === "OptionalMemberExpression")) {
+                      const prop: any = base.property
+                      if (base.computed) {
+                        if (prop && (prop.type === "StringLiteral" || prop.type === "NumericLiteral")) {
+                          keys.unshift(prop.value)
+                        } else {
+                          return
+                        }
+                      } else {
+                        if (prop && prop.type === "Identifier") {
+                          keys.unshift(prop.name)
+                        } else {
+                          return
+                        }
+                      }
+                      base = base.object
+                    }
+                    if (!base || base.type !== "Identifier") return
+                    const baseName = base.name
+                    if (!configLocalNames.includes(baseName)) return
+                    const value = getAtPath(buildRestartConfig, keys)
+                    if (value === undefined) return
+                    memberPath.replaceWith(literalFrom(value))
+                    configTouched = true
+
+                    if (!middlewares) return
+                    if (t.isIdentifier(memberPath.node.object) && memberPath.node.object.name === "middlewares") {
+                      const parent = memberPath.parent
+                      if (t.isCallExpression(parent) || t.isExpressionStatement(parent)) {
+                        memberPath.getFunctionParent()?.remove() || memberPath.getStatementParent()?.remove()
+                      }
+                    }
+                  },
+                  OptionalMemberExpression(omePath: any) {
+                    // Treat same as MemberExpression
+                    let base = omePath.node as any
+                    const keys: (string | number)[] = []
+                    while (base && (base.type === "MemberExpression" || base.type === "OptionalMemberExpression")) {
+                      const prop: any = base.property
+                      if (base.computed) {
+                        if (prop && (prop.type === "StringLiteral" || prop.type === "NumericLiteral")) {
+                          keys.unshift(prop.value)
+                        } else {
+                          return
+                        }
+                      } else {
+                        if (prop && prop.type === "Identifier") {
+                          keys.unshift(prop.name)
+                        } else {
+                          return
+                        }
+                      }
+                      base = base.object
+                    }
+                    if (!base || base.type !== "Identifier") return
+                    const baseName = base.name
+                    if (!configLocalNames.includes(baseName)) return
+                    const value = getAtPath(buildRestartConfig, keys)
+                    if (value === undefined) return
+                    omePath.replaceWith(literalFrom(value))
+                    configTouched = true
+                  },
                   CallExpression(callPath: any) {
                     const callee = callPath.get("callee")
                     if (!callee.isIdentifier()) return
@@ -119,18 +232,9 @@ export function restartSecurityPlugin(): BunPlugin {
                     callPath.replaceWith(arrow)
                     transformedSomething = true
                   },
-                  MemberExpression(memberPath: any) {
-                    if (!middlewares) return
-                    if (t.isIdentifier(memberPath.node.object) && memberPath.node.object.name === "middlewares") {
-                      const parent = memberPath.parent
-                      if (t.isCallExpression(parent) || t.isExpressionStatement(parent)) {
-                        memberPath.getFunctionParent()?.remove() || memberPath.getStatementParent()?.remove()
-                      }
-                    }
-                  }
                 })
 
-                if (!transformedSomething) return
+                if (!transformedSomething && !configTouched && !middlewares) return
 
                 let hasTrpcImport = false
                 programPath.get("body").forEach((p: any) => {
@@ -171,7 +275,7 @@ export function restartSecurityPlugin(): BunPlugin {
                     }
                   }
                 })
-                if (!hasTrpcImport) {
+                if (transformedSomething && !hasTrpcImport) {
                   const trpcImport = t.importDeclaration(
                     [t.importSpecifier(t.identifier("trpc"), t.identifier("trpc"))],
                     t.stringLiteral(relToTrpc)
@@ -179,13 +283,15 @@ export function restartSecurityPlugin(): BunPlugin {
                   programPath.unshiftContainer("body", trpcImport)
                 }
 
-                programPath.get("body").forEach((p: any) => {
-                  if (!p.isImportDeclaration()) return
-                  const srcVal: string | undefined = (p.node as any).source?.value
-                  if (srcVal === "zod") {
-                    p.remove()
-                  }
-                })
+                if (transformedSomething) {
+                  programPath.get("body").forEach((p: any) => {
+                    if (!p.isImportDeclaration()) return
+                    const srcVal: string | undefined = (p.node as any).source?.value
+                    if (srcVal === "zod") {
+                      p.remove()
+                    }
+                  })
+                }
               }
             }
           }
@@ -218,3 +324,5 @@ export function restartSecurityPlugin(): BunPlugin {
     }
   }
 }
+
+export const restartSecurityPlugin = restartSecurityPluginFn()

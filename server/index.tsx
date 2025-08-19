@@ -11,7 +11,7 @@ import {createBunServeHandler} from 'trpc-bun-adapter'
 import { restartConfig } from "../restart.config"
 import ZodTypeAny from "zod"
 import { registry } from "../shared/trpcRegistry"
-import { build } from "../build"
+import { build, buildCss } from "../build"
 import { middlewares, type MiddlewareContext } from "./middlewares"
 
 // tRPC section
@@ -78,17 +78,21 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
       })
     : null
 
-  if (!isStaticMode) {
-    console.log("Building client...")
-    try{
-      await build()
-      console.log("Client builded")
-    } catch (e) {
-      console.error("Building error:", e)
-      process.exit(1)
-    }
+  if (isStaticMode) {
+    console.log("Static: skipping client build")
   } else {
-    console.log("Static mode: skipping client build")
+    if (isDevMode) {
+      await buildCss(true)
+    } else {
+      console.log("Building client...")
+      try{
+        await build()
+        console.log("Client built")
+      } catch (e) {
+        console.error("Building error:", e)
+        process.exit(1)
+      }
+    }
   }
 
   const server = serve({

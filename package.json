@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently 'bunx @tailwindcss/cli -i ./app/styles.css -o ./dist/styles.css --minify --watch' 'bun --hot ./server/index.tsx --dev'",
-    "build": "bunx @tailwindcss/cli -i ./app/styles.css -o ./dist/styles.css --minify && bun run build.tsx",
+    "dev": "bun --hot ./server/index.tsx --dev",
+    "build": "bun run build.tsx",
     "static": "bun run ./server/index.tsx --static",
     "prod": "bun run ./server/index.tsx"
   },
