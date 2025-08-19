@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { create } from 'zustand'
-import { getName } from "../shared/functions"
+import { getName } from "./server"
 
 function getBrowserName() {
     const userAgent = navigator.userAgent.toLowerCase()

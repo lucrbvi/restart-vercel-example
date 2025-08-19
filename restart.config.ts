@@ -10,7 +10,7 @@ export const restartConfig: RestartConfig = {
   reactCompiler: {
     useReactCompiler: true,
     reactCompilerConfig: {
-      target: '19', // https://react.dev/reference/react-compiler/configuration
+        target: '19', // https://react.dev/reference/react-compiler/configuration
     }
   }
 }

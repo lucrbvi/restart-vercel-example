@@ -1,12 +1,12 @@
-import { createTRPCClient, httpBatchLink } from '@trpc/client'
+import { createTRPCProxyClient, httpBatchLink } from '@trpc/client'
 import type { AppRouter } from '../server/index'
 import { restartConfig } from '../restart.config'
 
-export const trpc = ((): ReturnType<typeof createTRPCClient<AppRouter>> | null => {
+export const trpc = ((): ReturnType<typeof createTRPCProxyClient<AppRouter>> | null => {
     if (typeof window === "undefined") {
       return null // prevent creating the tRPC client in the server
     }
-    return createTRPCClient<AppRouter>({
+    return createTRPCProxyClient<AppRouter>({
       links: [
         httpBatchLink({
           url: restartConfig.trpcEndpoint,

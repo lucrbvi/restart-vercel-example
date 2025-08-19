@@ -8,12 +8,11 @@ import type { Server } from "bun"
 import { renderToReadableStream } from "react-dom/server"
 import { publicProcedure, router } from './trpc'
 import {createBunServeHandler} from 'trpc-bun-adapter'
-import plugin from "bun-plugin-tailwind"
 import { restartConfig } from "../restart.config"
 import ZodTypeAny from "zod"
 import { registry } from "../shared/trpcRegistry"
-import "../shared/functions"
-import { reactCompilerPlugin } from "../plugins/reactCompilerPlugin"
+import { build } from "../build"
+import { middlewares, type MiddlewareContext } from "./middlewares"
 
 // tRPC section
 
@@ -57,6 +56,14 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
 
   console.log(`Starting server in ${mode} mode`)
 
+  if (!isStaticMode) {
+    try {
+      await import("app/server")
+    } catch (e) {
+      console.warn("Warning: could not preload server functions:", e)
+    }
+  }
+
   const trpcHandler = !isStaticMode
     ? createBunServeHandler({
         router: createAppRouter(),
@@ -74,17 +81,7 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
   if (!isStaticMode) {
     console.log("Building client...")
     try{
-      await Bun.build({
-        entrypoints: ['./app/entrypoint.tsx'],
-        outdir: './dist',
-        plugins: restartConfig.reactCompiler?.useReactCompiler ? [plugin, reactCompilerPlugin()] : [plugin],
-        target: 'browser',
-        format: 'esm',
-        minify: !isDevMode,
-        define: {
-          'process.env.NODE_ENV': JSON.stringify(isDevMode ? 'development' : 'production'),
-        },
-      })
+      await build()
       console.log("Client builded")
     } catch (e) {
       console.error("Building error:", e)
@@ -99,77 +96,163 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
     development: isDevMode,
     async fetch(this: Server, req: Request, server: Server): Promise<Response> {
       const path = new URL(req.url).pathname
+      const ctx: MiddlewareContext = {
+        req,
+        server,
+        path,
+        isDevMode,
+        isStaticMode,
+        state: {},
+      }
+
+      for (const m of middlewares) {
+        if (m.onRequest) {
+          const maybeResponse = await m.onRequest(ctx)
+          if (maybeResponse) {
+            let res = maybeResponse
+            for (const mm of middlewares) {
+              if (mm.onResponse) {
+                res = await mm.onResponse(ctx, res)
+              }
+            }
+            return res
+          }
+        }
+      }
       
       if (!isStaticMode && path.startsWith(restartConfig.trpcEndpoint)) {
         const trpcResponse = await trpcHandler!.fetch(req, server)
-        return trpcResponse ?? new Response("Not found (404)", { status: 404 })
+        const res = trpcResponse ?? new Response("Not found (404)", { status: 404 })
+        let finalRes = res
+        for (const m of middlewares) {
+          if (m.onResponse) {
+            finalRes = await m.onResponse(ctx, finalRes)
+          }
+        }
+        return finalRes
       }
 
       if (path === "/") {
         try {
           if (isStaticMode) {
             const html = file("dist/index.html")
-            return new Response(html, {
+            let res = new Response(html, {
               headers: {
                 "Content-Type": "text/html",
               }
             })
+            for (const m of middlewares) {
+              if (m.onResponse) {
+                res = await m.onResponse(ctx, res)
+              }
+            }
+            return res
           }
           const { Body } = await import("app/App")
           const stream = await renderToReadableStream(<Body/>, {})
-          return new Response(stream, {
+          let res = new Response(stream, {
             headers: { 
               "Content-Type": "text/html",
               "Cache-Control": isDevMode ? "no-cache" : "public, max-age=0"
             },
           })
+          for (const m of middlewares) {
+            if (m.onResponse) {
+              res = await m.onResponse(ctx, res)
+            }
+          }
+          return res
         } catch (e) {
           console.error("SSR error:", e)
-          return new Response("Server Error (500)", { status: 500 })
+          let res = new Response("Server Error (500)", { status: 500 })
+          for (const m of middlewares) {
+            if (m.onResponse) {
+              res = await m.onResponse(ctx, res)
+            }
+          }
+          return res
         }
       }
 
       if (path.endsWith(".html")) {
         const Filepath = path.split("/").pop()
         const publicFile = file("dist/" + Filepath)
-        return new Response(publicFile, {
+        let res = new Response(publicFile, {
           headers: { "Content-Type": "text/html"}
         })
+        for (const m of middlewares) {
+          if (m.onResponse) {
+            res = await m.onResponse(ctx, res)
+          }
+        }
+        return res
       }
       
       if (path.endsWith(".txt")) {
         const Filepath = path.split("/").pop()
         const publicFile = file("public/" + Filepath)
-        return new Response(publicFile, {
+        let res = new Response(publicFile, {
           headers: { "Content-Type": "text/plain"}
         })
+        for (const m of middlewares) {
+          if (m.onResponse) {
+            res = await m.onResponse(ctx, res)
+          }
+        }
+        return res
       }
 
       if (path.endsWith(".css")) {
         const Filepath = path.split("/").pop()
         const publicFile = file("dist/" + Filepath)
-        return new Response(publicFile, {
+        let res = new Response(publicFile, {
           headers: { "Content-Type": "text/css"}
         })
+        for (const m of middlewares) {
+          if (m.onResponse) {
+            res = await m.onResponse(ctx, res)
+          }
+        }
+        return res
       }
 
       if (path.endsWith(".svg")) {
         const Filepath = path.split("/").pop()
         const publicFile = file("public/" + Filepath)
-        return new Response(publicFile, {
+        let res = new Response(publicFile, {
           headers: { "Content-Type": "image/svg+xml"}
         })
+        for (const m of middlewares) {
+          if (m.onResponse) {
+            res = await m.onResponse(ctx, res)
+          }
+        }
+        return res
       }
 
       if (path.endsWith(".js")) {
         const Filepath = path.split("/").pop()
         const publicFile = file("dist/" + Filepath)
-        return new Response(publicFile, {
+        let res = new Response(publicFile, {
           headers: { "Content-Type": "application/javascript"}
         })
+        for (const m of middlewares) {
+          if (m.onResponse) {
+            res = await m.onResponse(ctx, res)
+          }
+        }
+        return res
       }
 
-      return new Response("Page not found (404)", { status: 404 })
+      {
+        let res = new Response("Page not found (404)", { status: 404 })
+        for (const m of middlewares) {
+          if (m.onResponse) {
+            res = await m.onResponse(ctx, res)
+          }
+        }
+        return res
+      }
     },
     websocket: {
       message: () => {
