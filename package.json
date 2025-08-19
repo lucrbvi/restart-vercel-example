@@ -6,9 +6,8 @@
   "scripts": {
     "dev": "concurrently 'bunx @tailwindcss/cli -i ./app/styles.css -o ./dist/styles.css --minify --watch' 'bun --hot ./server/index.tsx --dev'",
     "build": "bunx @tailwindcss/cli -i ./app/styles.css -o ./dist/styles.css --minify && bun run build.tsx",
-    "prod": "bunx @tailwindcss/cli -i ./app/styles.css -o ./dist/styles.css --minify && bun run build.tsx && bun run ./server/index.tsx",
     "static": "bun run ./server/index.tsx --static",
-    "prod:fast": "bun run ./server/index.tsx"
+    "prod": "bun run ./server/index.tsx"
   },
   "dependencies": {
     "bun-plugin-tailwind": "^0.0.15",
@@ -20,11 +19,14 @@
     "zustand": "^5.0.7"
   },
   "devDependencies": {
+    "@babel/core": "^7.28.3",
     "@tailwindcss/cli": "^4.1.12",
     "@trpc/client": "^11.4.4",
     "@trpc/server": "^11.4.4",
+    "@types/babel__core": "^7.20.5",
     "@types/bun": "latest",
     "@types/react": "^19",
-    "@types/react-dom": "^19"
+    "@types/react-dom": "^19",
+    "babel-plugin-react-compiler": "^19.1.0-rc.2"
   }
 }

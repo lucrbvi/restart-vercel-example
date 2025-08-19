@@ -1,6 +1,6 @@
 # Restart: the open React framework
 
-Restart is a *minimal* and fully transparent React full-stack framework. All the code for Restart is fully accessible in the template and you can modify it as well.
+Restart is a *minimal* and fully transparent full-stack React framework. All the code for Restart is fully accessible in the template and you can modify it as well.
 
 Restart relly on some cool tech to work:
 1. [Bun](https://bun.sh): bundler and runtime
