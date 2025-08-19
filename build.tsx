@@ -31,6 +31,9 @@ export async function build() {
     target: 'browser',
     format: 'esm',
     minify: true,
+    define: {
+      "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "production"),
+    },
   })
 
   const { Body } = await import("app/App")

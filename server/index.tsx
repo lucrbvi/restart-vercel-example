@@ -5,7 +5,6 @@
 
 import { serve, file } from "bun"
 import type { Server } from "bun"
-import { renderToReadableStream } from "react-dom/server"
 import { publicProcedure, router } from './trpc'
 import {createBunServeHandler} from 'trpc-bun-adapter'
 import { restartConfig } from "../restart.config"
@@ -152,6 +151,7 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
             }
             return res
           }
+          const { renderToReadableStream } = await import("react-dom/server")
           const { Body } = await import("app/App")
           const stream = await renderToReadableStream(<Body/>, {})
           let res = new Response(stream, {
