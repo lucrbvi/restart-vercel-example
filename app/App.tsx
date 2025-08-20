@@ -33,7 +33,6 @@ function BodyHTML() {
 
 export const Body = restartConfig.useReactServerComponents 
 	? async function Body() {
-			console.log("RSC is enabled")
 			return <BodyHTML/>
 		}
 	: function Body() {

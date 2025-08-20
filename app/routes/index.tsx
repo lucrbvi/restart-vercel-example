@@ -133,6 +133,7 @@ const Background = () => {
 };
 
 const FunctionSelector = () => {
+  "use client"
   const { selectedFunction, setSelectedFunction } = useStore();
   const functionNames = Object.keys(serverFnAvailable);
 
@@ -152,6 +153,7 @@ const FunctionSelector = () => {
 };
 
 const TestBackend = () => {
+  "use client"
   const { inputName, setInputName, result, loading, error, testServerFunction, selectedFunction } = useStore();
   const functionConfig = serverFnAvailable[selectedFunction as keyof typeof serverFnAvailable];
   const requiresInput = functionConfig?.requiresInput ?? true;
@@ -203,7 +205,7 @@ const TestBackend = () => {
   );
 };
 
-export default function Page() {
+export default async function Page() {
   return (
     <div className="min-h-screen bg-gray-900 relative overflow-hidden flex flex-col">
       <Background />
@@ -216,7 +218,6 @@ export default function Page() {
           <br/>
           <h3 className="text-white text-center">The minimal and fully open full-stack React framework</h3>
           <br/>
-        
           <TestBackend />
         </div>
       </div>

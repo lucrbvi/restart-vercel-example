@@ -14,6 +14,7 @@ import { registry } from "../shared/trpcRegistry"
 import { build, buildCss } from "../build"
 import { middlewares, type MiddlewareContext } from "./middlewares"
 import { renderToReadableStream } from "react-dom/server"
+import { Router as WouterRouter } from "wouter"
 
 // tRPC section
 
@@ -95,6 +96,7 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
       console.log("Building client...")
       try{
         await build()
+        await buildCss(false)
         console.log("Client built")
       } catch (e) {
         console.error("Building error:", e)
@@ -163,37 +165,6 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
       const knownRoutes = isDevMode ? computeKnownRoutes() : (globalThis as any).__KNOWN_ROUTES__ ?? ((globalThis as any).__KNOWN_ROUTES__ = computeKnownRoutes())
       const isKnownClientRoute = knownRoutes.includes(path)
 
-      if (path === "/rsc") {
-        async function RSCTest() {
-          "use server"
-          const data = await new Promise<string>((resolve) => {
-            setTimeout(() => resolve('Data loaded asynchronously!'), 2000);
-          });
-
-          return (
-            <html>
-              <body>
-                <h1>RSC Test</h1>
-                <h3>This is a small test to see if RSC is working</h3>
-                <p>Async data: {data}</p>
-                <script type="module" src="/entrypoint.js" crossOrigin="anonymous"></script>
-                <a>This page is 100% server-made</a>
-              </body>
-            </html>
-          )
-        }
-
-        const stream = await renderToReadableStream(<RSCTest />, {
-          onError(err) {
-            console.error("React SSR onError (/rsc):", err)
-          }
-        })
-        try {
-          await (stream as any).allReady
-        } catch {}
-        return new Response(stream, { headers: { 'Content-Type': 'text/html' } })
-      }
-
       if (path === "/" || isKnownClientRoute) {
         try {
           if (isStaticMode) {
@@ -213,7 +184,53 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
           
           (globalThis as any).__SSR_PATH__ = path
           
+          if (restartConfig.useReactServerComponents) {
+            try {
+              const routeName = path.slice(1) || "index"
+              await build()
+              const { default: PageComponent } = await import(`../dist/routes/${routeName}.js`)
+              const stream = await renderToReadableStream(
+                <html>
+                  <head>
+                    <meta charSet="utf-8" />
+                    <meta name="viewport" content="width=device-width, initial-scale=1" />
+                    <title>Restart</title>
+                    <link rel="stylesheet" href="/styles.css" />
+                    <link rel="icon" type="image/svg+xml" href="/react.svg" />
+                  </head>
+                  <body>
+                    <div id="root">
+                      <WouterRouter hook={() => [path, () => {}]}>
+                        <PageComponent />
+                      </WouterRouter>
+                    </div>
+                    <script type="module" src="/entrypoint.js" crossOrigin="anonymous"></script>
+                  </body>
+                </html>
+              )
+              try {
+                await (stream as any).allReady
+              } catch {}
+              let res = new Response(stream, {
+                headers: {
+                  "Content-Type": "text/html",
+                  "Cache-Control": isDevMode ? "no-cache" : "public, max-age=0"
+                },
+              })
+              for (const m of middlewares) {
+                if (m.onResponse) {
+                  res = await m.onResponse(ctx, res)
+                }
+              }
+              return res
+            } catch (e) {
+              console.error("RSC rendering error:", e)
+              // Fallback to normal SSR
+            }
+          }
+
           const { Body } = await import("app/App")
+          
           const stream = await renderToReadableStream(<Body />, {
             onError(err) {
               console.error("React SSR onError (/):", err)
