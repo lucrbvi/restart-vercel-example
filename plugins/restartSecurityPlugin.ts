@@ -297,9 +297,18 @@ function restartSecurityPluginFn(): BunPlugin {
           }
         }
 
+        const plugins: any[] = [babelPlugin as any]
+        // Chain React Compiler on files transformed by the security plugin
+        // so they don't skip compilation due to short-circuiting other plugins.
+        if (buildRestartConfig.reactCompiler?.useReactCompiler) {
+          plugins.push(["babel-plugin-react-compiler", {
+            ...(buildRestartConfig.reactCompiler?.reactCompilerConfig ?? {})
+          }])
+        }
+
         const result = await babel.transformAsync(source, {
           filename: args.path,
-          plugins: [babelPlugin as any],
+          plugins,
           parserOpts: { plugins: ["jsx", "typescript"] },
           sourceMaps: false,
           babelrc: false,

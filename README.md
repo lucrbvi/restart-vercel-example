@@ -7,7 +7,8 @@ Restart relly on some cool techs to work:
 2. <a href="https://typescriptlang.org/" target="_blank">TypeScript</a>: the cooler and safer JavaScript
 3. <a href="https://trpc.io/" target="_blank">tRPC</a>: expose type-safe backend functions to the frontend
 4. <a href="https://tailwindcss.com/" target="_blank">Tailwind</a>: make css writing way easier
-5. <a href="https://zustand.docs.pmnd.rs/" target="_blank">Zustand</a>: easy state-management solution for React
+5. <a href="https://github.com/molefrog/wouter" target="_blank">Wouter</a>: a minimal file-based router
+6. <a href="https://zustand.docs.pmnd.rs/" target="_blank">Zustand</a>: easy state-management solution for React
 
 <br/>
 

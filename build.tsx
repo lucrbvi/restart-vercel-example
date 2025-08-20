@@ -1,6 +1,7 @@
 import tailwindPlugin from "bun-plugin-tailwind"
 import { reactCompilerPlugin } from "./plugins/reactCompilerPlugin"
 import { restartSecurityPlugin } from "./plugins/restartSecurityPlugin"
+import { bunGlobPlugin } from "./plugins/bunGlobPlugin"
 import { file, write } from "bun"
 import { renderToString } from 'react-dom/server'
 import { restartConfig } from "./restart.config"
@@ -26,8 +27,8 @@ export async function build() {
     entrypoints: [entrypointPath],
     outdir: outdirPath,
     plugins: restartConfig.reactCompiler?.useReactCompiler
-      ? [tailwindPlugin, restartSecurityPlugin, reactCompilerPlugin]
-      : [tailwindPlugin, restartSecurityPlugin],
+      ? [tailwindPlugin, bunGlobPlugin, restartSecurityPlugin, reactCompilerPlugin]
+      : [tailwindPlugin, bunGlobPlugin, restartSecurityPlugin],
     target: 'browser',
     format: 'esm',
     minify: true,

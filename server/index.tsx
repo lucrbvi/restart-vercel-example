@@ -4,6 +4,7 @@
  */
 
 import { serve, file } from "bun"
+import pathLib from "path"
 import type { Server } from "bun"
 import { publicProcedure, router } from './trpc'
 import {createBunServeHandler} from 'trpc-bun-adapter'
@@ -44,6 +45,10 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
   const isDevMode = argv.includes("--dev")
   const mode = isStaticMode ? "static" : (isDevMode ? "dev" : "prod")
 
+  if (!isDevMode && restartConfig.useReactScan) {
+    restartConfig.useReactScan = false
+  }
+
   // Ensure environment hints for libraries that read NODE_ENV
   try {
     if (isDevMode) {
@@ -55,12 +60,10 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
 
   console.log(`Starting server in ${mode} mode`)
 
-  if (!isStaticMode) {
-    try {
-      await import("app/server")
-    } catch (e) {
-      console.warn("Warning: could not preload server functions:", e)
-    }
+  try {
+    await import("app/server")
+  } catch (e) {
+    console.warn("Warning: could not preload server functions:", e)
   }
 
   const trpcHandler = !isStaticMode
@@ -81,7 +84,12 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
     console.log("Static: skipping client build")
   } else {
     if (isDevMode) {
-      await buildCss(true)
+      try {
+        await build()
+        await buildCss(true)
+      } catch (e) {
+        console.error("Build error:", e)
+      }
     } else {
       console.log("Building client...")
       try{
@@ -135,7 +143,26 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
         return finalRes
       }
 
-      if (path === "/") {
+      // check available routes from app/routes
+      function computeKnownRoutes(): string[] {
+        const cwd = process.cwd().replace(/\\/g, "/")
+        const glob = new Bun.Glob(cwd + "/app/routes/**/*.tsx")
+        const result: string[] = []
+        for (const match of glob.scanSync({ cwd })) {
+          const abs = match.startsWith("/") ? match : pathLib.resolve(cwd, match)
+          const rel = abs.replace(/\\/g, "/").replace(cwd + "/app/routes", "")
+          let route = rel.replace(/\.tsx$/, "")
+          if (route === "/index") route = "/"
+          else if (route.endsWith("/index")) route = route.slice(0, -("/index".length))
+          result.push(route)
+        }
+        return Array.from(new Set(result)).sort((a, b) => b.length - a.length)
+      }
+
+      const knownRoutes = isDevMode ? computeKnownRoutes() : (globalThis as any).__KNOWN_ROUTES__ ?? ((globalThis as any).__KNOWN_ROUTES__ = computeKnownRoutes())
+      const isKnownClientRoute = knownRoutes.includes(path)
+
+      if (path === "/" || isKnownClientRoute) {
         try {
           if (isStaticMode) {
             const html = file("dist/index.html")
@@ -248,15 +275,19 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
         return res
       }
 
-      {
-        let res = new Response("Page not found (404)", { status: 404 })
-        for (const m of middlewares) {
-          if (m.onResponse) {
-            res = await m.onResponse(ctx, res)
-          }
-        }
-        return res
+      if (path) {
+        
       }
+
+      
+      let res = new Response("Page not found (404)", { status: 404 })
+      for (const m of middlewares) {
+        if (m.onResponse) {
+          res = await m.onResponse(ctx, res)
+        }
+      }
+      return res
+      
     },
     websocket: {
       message: () => {

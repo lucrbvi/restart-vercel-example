@@ -1,74 +1,32 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import { create } from 'zustand'
-import { getName } from "./server"
-
-function getBrowserName() {
-    const userAgent = navigator.userAgent.toLowerCase()
-    
-    if (userAgent.includes('firefox')) return 'Firefox'
-    if (userAgent.includes('edg')) return 'Edge'
-    if (userAgent.includes('chrome')) return 'Chrome'
-    if (userAgent.includes('safari')) return 'Safari'
-    if (userAgent.includes('opera') || userAgent.includes('opr')) return 'Opera'
-    
-    return 'Unknown'
-}
-
-type CountState = { count: number; inc: () => void; dec: () => void }
-const useCount = create<CountState>((set) => ({
-  count: 0,
-  inc: () => set((s) => ({ count: s.count + 1 })),
-  dec: () => set((s) => ({ count: s.count - 1 })),
-}))
+import { restartConfig } from "restart.config"
+import { Router } from "./router"
 
 export function App() {
-  const { count, inc, dec } = useCount()
-  const [greeting, setGreeting] = useState<string>("Loading...")
-
-  useEffect(() => {
-    getName(getBrowserName())
-      .then((res: string) => setGreeting(res))
-      .catch((err: string) => {
-        console.error("tRPC error:", err)
-        setGreeting("Error!")
-      })
-  }, [])
-
-  return (
-    <div className="flex flex-col text-4xl items-center justify-center min-h-screen bg-gray-100">
-      <h1>
-        {greeting} — you have clicked {count} times!
-      </h1>
-      <div className="flex gap-4">
-        <button onClick={inc}>+</button>
-        <button onClick={dec}>-</button>
-      </div>
-    </div>
-  );
+	return (
+		<Router />
+	);
 }
 
 export function Body() {
-  return (
-    <html>
-      <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Restart</title>
-        <link rel="stylesheet" href="/styles.css" />
-        <link rel="icon" type="image/svg+xml" href="/react.svg"></link>
-      </head>
-      <body>
-        <div id="root">
-          <App />
-        </div>
-        <script
-          type="module"
-          src="/entrypoint.js"
-          crossOrigin="anonymous"
-        ></script>
-      </body>
-    </html>
-  )
+	return (
+		<html>
+			<head>
+				<meta charSet="utf-8" />
+				<meta name="viewport" content="width=device-width, initial-scale=1" />
+				<title>Restart</title>
+				<link rel="stylesheet" href="/styles.css" />
+				<link rel="icon" type="image/svg+xml" href="/react.svg"></link>
+				{restartConfig.useReactScan && (
+					// include react-scan in dev mode only if it's enabled in the config
+					<script crossOrigin="anonymous" src="//unpkg.com/react-scan/dist/auto.global.js"></script>
+				)}
+			</head>
+			<body>
+				<div id="root">
+					{typeof window !== 'undefined' ? <App /> : null}
+				</div>
+				<script type="module" src="/entrypoint.js" crossOrigin="anonymous"></script>
+			</body>
+		</html>
+	);
 }
