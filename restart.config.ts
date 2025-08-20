@@ -2,7 +2,8 @@ interface RestartConfig {
   port: number,
   trpcEndpoint: string,
   reactCompiler?: { useReactCompiler: boolean, reactCompilerConfig?: any },
-  useReactScan?: boolean
+  useReactScan?: boolean,
+  useReactServerComponents?: boolean
 }
 
 export const restartConfig: RestartConfig = {
@@ -14,5 +15,6 @@ export const restartConfig: RestartConfig = {
         target: '19', // https://react.dev/reference/react-compiler/configuration
     }
   },
-  useReactScan: true // if true, it will use react-scan for dev mode only
+  useReactScan: true, // if true, it will use react-scan for dev mode only
+  useReactServerComponents: true
 }

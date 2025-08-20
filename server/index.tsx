@@ -13,6 +13,7 @@ import ZodTypeAny from "zod"
 import { registry } from "../shared/trpcRegistry"
 import { build, buildCss } from "../build"
 import { middlewares, type MiddlewareContext } from "./middlewares"
+import { renderToReadableStream } from "react-dom/server"
 
 // tRPC section
 
@@ -162,6 +163,37 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
       const knownRoutes = isDevMode ? computeKnownRoutes() : (globalThis as any).__KNOWN_ROUTES__ ?? ((globalThis as any).__KNOWN_ROUTES__ = computeKnownRoutes())
       const isKnownClientRoute = knownRoutes.includes(path)
 
+      if (path === "/rsc") {
+        async function RSCTest() {
+          "use server"
+          const data = await new Promise<string>((resolve) => {
+            setTimeout(() => resolve('Data loaded asynchronously!'), 2000);
+          });
+
+          return (
+            <html>
+              <body>
+                <h1>RSC Test</h1>
+                <h3>This is a small test to see if RSC is working</h3>
+                <p>Async data: {data}</p>
+                <script type="module" src="/entrypoint.js" crossOrigin="anonymous"></script>
+                <a>This page is 100% server-made</a>
+              </body>
+            </html>
+          )
+        }
+
+        const stream = await renderToReadableStream(<RSCTest />, {
+          onError(err) {
+            console.error("React SSR onError (/rsc):", err)
+          }
+        })
+        try {
+          await (stream as any).allReady
+        } catch {}
+        return new Response(stream, { headers: { 'Content-Type': 'text/html' } })
+      }
+
       if (path === "/" || isKnownClientRoute) {
         try {
           if (isStaticMode) {
@@ -178,11 +210,20 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
             }
             return res
           }
-          const { renderToReadableStream } = await import("react-dom/server")
+          
+          (globalThis as any).__SSR_PATH__ = path
+          
           const { Body } = await import("app/App")
-          const stream = await renderToReadableStream(<Body/>, {})
+          const stream = await renderToReadableStream(<Body />, {
+            onError(err) {
+              console.error("React SSR onError (/):", err)
+            }
+          })
+          try {
+            await (stream as any).allReady
+          } catch {}
           let res = new Response(stream, {
-            headers: { 
+            headers: {
               "Content-Type": "text/html",
               "Cache-Control": isDevMode ? "no-cache" : "public, max-age=0"
             },

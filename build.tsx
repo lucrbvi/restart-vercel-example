@@ -38,8 +38,11 @@ export async function build() {
   })
 
   const { Body } = await import("app/App")
-  const htmlString = renderToString(<Body />)
-  await write(outdirPath + "/index.html", htmlString)
+  if (!restartConfig.useReactServerComponents) {
+    const htmlString = renderToString(<Body />)
+    await write(outdirPath + "/index.html", htmlString)
+  }
+  return
 }
 
 // produce the client bundle

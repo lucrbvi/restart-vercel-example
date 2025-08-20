@@ -7,7 +7,7 @@ export function App() {
 	);
 }
 
-export function Body() {
+function BodyHTML() {
 	return (
 		<html>
 			<head>
@@ -23,10 +23,19 @@ export function Body() {
 			</head>
 			<body>
 				<div id="root">
-					{typeof window !== 'undefined' ? <App /> : null}
+					<App />
 				</div>
 				<script type="module" src="/entrypoint.js" crossOrigin="anonymous"></script>
 			</body>
 		</html>
-	);
+	)
 }
+
+export const Body = restartConfig.useReactServerComponents 
+	? async function Body() {
+			console.log("RSC is enabled")
+			return <BodyHTML/>
+		}
+	: function Body() {
+			return <BodyHTML/>
+		}

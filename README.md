@@ -13,6 +13,7 @@ Restart relly on some cool techs to work:
 <br/>
 
 Restart is a true modern framework:
+- You can use <a href="https://react.dev/reference/rsc/server-components" target="_blank">React Server Components</a>.
 - You can use the React Compiler (check <a href="./restart.config.ts" target="_blank">`restart.config.ts`</a> and <a href="plugins/reactCompilerPlugin.ts" target="_blank">our Bun plugin</a>)
 - You can define in a **secure** way backend functions with `serverFunction`, it's an easy way to write tRPC public procedure (*it does not leak to the client*).
 - You can create your own middlewares with `newMiddleware`.

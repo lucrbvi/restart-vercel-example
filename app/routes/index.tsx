@@ -60,17 +60,26 @@ const useStore = create<State>((set, get) => ({
   }
 }));
 
+function mulberry32(seed: number) {
+  return function() {
+    let t = seed += 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+}
+const seededRandom = mulberry32(1337);
 const logoData = [...Array(12)].map((_, i) => {
   const isBunLogo = i % 3 === 0;
-  const randomLeft = Math.random() * 150 + i * 15;
-  const randomTop = Math.random() * 100 + i * 20;
+  const randomLeft = seededRandom() * 150 + i * 15;
+  const randomTop = seededRandom() * 100 + i * 20;
   const driftDuration = 8 + (i % 4);
   const spinDuration = 4 + (i % 3);
   const spinDelay = (i * 0.5) % 4;
-  const driftFromX = 100 + Math.random() * 50;
-  const driftFromY = 100 + Math.random() * 50;
-  const driftToX = -200 - Math.random() * 100;
-  const driftToY = -200 - Math.random() * 100;
+  const driftFromX = 100 + seededRandom() * 50;
+  const driftFromY = 100 + seededRandom() * 50;
+  const driftToX = -200 - seededRandom() * 100;
+  const driftToY = -200 - seededRandom() * 100;
   return { i, isBunLogo, left: randomLeft, top: randomTop, driftDuration, spinDuration, spinDelay, driftFromX, driftFromY, driftToX, driftToY };
 });
 
