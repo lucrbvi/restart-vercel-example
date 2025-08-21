@@ -38,3 +38,7 @@ export const Body = restartConfig.useReactServerComponents
 	: function Body(props: { children: React.ReactNode }) {
 			return <BodyHTML>{props.children}</BodyHTML>
 		}
+
+export const BodySync = function BodySync(props: { children: React.ReactNode }) {
+	return <BodyHTML>{props.children}</BodyHTML>
+}

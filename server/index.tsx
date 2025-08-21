@@ -14,7 +14,6 @@ import { registry } from "../shared/trpcRegistry"
 import { build, buildCss } from "../build"
 import { middlewares, type MiddlewareContext } from "./middlewares"
 import { renderToReadableStream } from "react-dom/server"
-import { Router as WouterRouter } from "wouter"
 
 // tRPC section
 
@@ -190,9 +189,14 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
       // check available routes from app/routes
       function computeKnownRoutes(): string[] {
         const cwd = process.cwd().replace(/\\/g, "/")
-        const glob = new Bun.Glob(cwd + "/app/routes/**/*.tsx")
         const result: string[] = []
-        for (const match of glob.scanSync({ cwd })) {
+        
+        // Scan for both files and directories
+        const fileGlob = new Bun.Glob(cwd + "/app/routes/**/*.tsx")
+        const dirGlob = new Bun.Glob(cwd + "/app/routes/**/")
+        
+        // Process files
+        for (const match of fileGlob.scanSync({ cwd })) {
           const abs = match.startsWith("/") ? match : pathLib.resolve(cwd, match)
           const rel = abs.replace(/\\/g, "/").replace(cwd + "/app/routes", "")
           let route = rel.replace(/\.tsx$/, "")
@@ -200,6 +204,22 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
           else if (route.endsWith("/index")) route = route.slice(0, -("/index".length))
           result.push(route)
         }
+        
+        // Process directories (check for index.tsx)
+        for (const match of dirGlob.scanSync({ cwd })) {
+          const abs = match.startsWith("/") ? match : pathLib.resolve(cwd, match)
+          const rel = abs.replace(/\\/g, "/").replace(cwd + "/app/routes", "")
+          
+          // Check if directory has index.tsx
+          const indexPath = abs + "/index.tsx"
+          if (Bun.file(indexPath).size > 0) {
+            let route = rel
+            if (route === "/") route = "/"
+            else if (route.endsWith("/")) route = route.slice(0, -1)
+            result.push(route)
+          }
+        }
+        
         return Array.from(new Set(result)).sort((a, b) => b.length - a.length)
       }
 
@@ -209,18 +229,59 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
       if (path === "/" || isKnownClientRoute) {
         try {
           if (isStaticMode) {
-            const html = file("dist/index.html")
-            let res = new Response(html, {
-              headers: {
-                "Content-Type": "text/html",
+            // In static mode, still generate content per route for RSC
+            if (restartConfig.useReactServerComponents) {
+              const routeName = path.slice(1) || "index"
+              
+              // Try to import as a file first, then as a directory with index.js
+              let routeModule
+              try {
+                routeModule = await import(`../dist/routes/${routeName}.js`)
+              } catch {
+                // If file doesn't exist, try as directory with index.js
+                routeModule = await import(`../dist/routes/${routeName}/index.js`)
               }
-            })
-            for (const m of middlewares) {
-              if (m.onResponse) {
-                res = await m.onResponse(ctx, res)
+              
+              const { default: PageComponent } = routeModule
+              const { Body } = await import("app/App")
+              
+              const stream = await renderToReadableStream(
+                <Body><PageComponent /></Body>
+                , {
+                onError(error) {
+                  console.error("RSC static rendering error:", error)
+                }
+              })
+              try {
+                await (stream as any).allReady
+              } catch {}
+              let res = new Response(stream, {
+                headers: {
+                  "Content-Type": "text/html",
+                  "Cache-Control": "public, max-age=3600"
+                },
+              })
+              for (const m of middlewares) {
+                if (m.onResponse) {
+                  res = await m.onResponse(ctx, res)
+                }
               }
+              return res
+            } else {
+              // Traditional static mode - serve index.html for all routes
+              const html = file("dist/index.html")
+              let res = new Response(html, {
+                headers: {
+                  "Content-Type": "text/html",
+                }
+              })
+              for (const m of middlewares) {
+                if (m.onResponse) {
+                  res = await m.onResponse(ctx, res)
+                }
+              }
+              return res
             }
-            return res
           }
           
           (globalThis as any).__SSR_PATH__ = path
@@ -230,7 +291,16 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
             try {
               const routeName = path.slice(1) || "index"
               await build()
-              const routeModule = await import(`../dist/routes/${routeName}.js`)
+              
+              // Try to import as a file first, then as a directory with index.js
+              let routeModule
+              try {
+                routeModule = await import(`../dist/routes/${routeName}.js`)
+              } catch {
+                // If file doesn't exist, try as directory with index.js
+                routeModule = await import(`../dist/routes/${routeName}/index.js`)
+              }
+              
               const { default: PageComponent } = routeModule
               
               // Register any server actions from this route

@@ -7,6 +7,7 @@ import { reactServerComponentPluginClient, reactServerComponentPluginServer } fr
 
 import { file, write } from "bun"
 import { renderToString } from 'react-dom/server'
+import { renderToReadableStream } from 'react-dom/server'
 import { restartConfig } from "./restart.config"
 
 const entrypointPath = "./app/entrypoint.tsx" // change this if you want to make your own entrypoint script
@@ -40,9 +41,25 @@ export async function build() {
     },
   })
 
-  const { Body } = await import("app/App")
-  if (!restartConfig.useReactServerComponents) {
-    const htmlString = renderToString(<Body />)
+  const { Body, BodySync, App } = await import("app/App")
+  
+  // Always generate index.html, but with different content based on RSC mode
+  if (restartConfig.useReactServerComponents) {
+    // For RSC mode, use renderToReadableStream to handle async components
+    const stream = await renderToReadableStream(<Body><App /></Body>)
+    await (stream as any).allReady
+    const chunks: string[] = []
+    const reader = stream.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      chunks.push(new TextDecoder().decode(value))
+    }
+    const htmlString = chunks.join('')
+    await write(outdirPath + "/index.html", htmlString)
+  } else {
+    // For traditional SSR mode, render the full app
+    const htmlString = renderToString(<Body><App /></Body>)
     await write(outdirPath + "/index.html", htmlString)
   }
 
