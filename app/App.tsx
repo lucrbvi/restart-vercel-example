@@ -7,7 +7,7 @@ export function App() {
 	);
 }
 
-function BodyHTML() {
+function BodyHTML(props: { children: React.ReactNode }) {
 	return (
 		<html>
 			<head>
@@ -23,7 +23,7 @@ function BodyHTML() {
 			</head>
 			<body>
 				<div id="root">
-					<App />
+					{props.children}
 				</div>
 				<script type="module" src="/entrypoint.js" crossOrigin="anonymous"></script>
 			</body>
@@ -32,9 +32,9 @@ function BodyHTML() {
 }
 
 export const Body = restartConfig.useReactServerComponents 
-	? async function Body() {
-			return <BodyHTML/>
+	? async function Body(props: { children: React.ReactNode }) {
+			return <BodyHTML>{props.children}</BodyHTML>
 		}
-	: function Body() {
-			return <BodyHTML/>
+	: function Body(props: { children: React.ReactNode }) {
+			return <BodyHTML>{props.children}</BodyHTML>
 		}

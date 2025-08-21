@@ -8,6 +8,33 @@
 import { hydrateRoot, createRoot } from "react-dom/client"
 import { App } from "@/App"
 import { restartConfig } from "restart.config"
+import { Suspense, lazy, Component } from "react"
+
+// Error boundary component for client components
+class ClientErrorBoundary extends Component<
+  { children: React.ReactNode, fallback: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: any) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  override componentDidCatch(error: Error, errorInfo: any) {
+    console.error('Client component error:', error, errorInfo)
+  }
+
+  override render() {
+    if (this.state.hasError) {
+      return this.props.fallback
+    }
+    return this.props.children
+  }
+}
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     try {
@@ -25,9 +52,9 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
                   createRoot(rootElement).render(app)
                 }
             } else {
-                const routeModules = import.meta.glob('./routes/**/*.tsx')
-                
+                // RSC mode: Server already rendered everything, just hydrate client components
                 const clientSlots = document.querySelectorAll('[restart-react-client-component]')
+                
                 clientSlots.forEach(async (slot) => {
                     const componentId = slot.getAttribute('restart-react-client-component')
                     if (componentId) {
@@ -37,15 +64,13 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
                             if (componentId.includes(':')) {
                                 const [routeRelPath, componentName] = componentId.split(':')
                                 const routePath = `./routes/${routeRelPath}.tsx`
+                                const routeModules = import.meta.glob('./routes/**/*.tsx')
                                 const moduleLoader = routeModules[routePath]
                                 
                                 if (moduleLoader) {
                                     const module = await moduleLoader() as any
-                                    Component = module[componentName as any] ?? module.default
+                                    Component = module[componentName as keyof typeof module] ?? module.default
                                 }
-                            } else {
-                                // Fallback: try default export on current page module if we can infer it
-                                // Not always possible, so we skip to avoid false mounting
                             }
                             
                             if (Component) {

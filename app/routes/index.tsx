@@ -205,6 +205,13 @@ const TestBackend = () => {
   );
 };
 
+async function ServerActionTest() {
+  "use server"
+  return (
+    <h1>Server Action Test</h1>
+  )
+}
+
 export default async function Page() {
   return (
     <div className="min-h-screen bg-gray-900 relative overflow-hidden flex flex-col">

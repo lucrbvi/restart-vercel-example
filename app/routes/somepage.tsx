@@ -1,13 +1,28 @@
 import { getServerTime } from "@/server"
 import { useState } from "react"
 
+// Native server action example
+async function serverGreeting(name: string) {
+    "use server"
+    return `Hello from server action, ${name}! Time: ${new Date().toISOString()}`
+}
+
 function Click() {
     "use client"
     const [count, setCount] = useState(0)
+    const [greeting, setGreeting] = useState("")
+    
+    const handleServerAction = async () => {
+        const result = await serverGreeting("React User")
+        setGreeting(result)
+    }
     
     return (
         <div>
-            <button onClick={() => setCount(count + 1)}>{count}</button>
+            <button onClick={() => setCount(count + 1)}>Count: {count}</button>
+            <br />
+            <button onClick={handleServerAction}>Test Server Action</button>
+            {greeting && <p>Server Response: {greeting}</p>}
         </div>
     )
 }

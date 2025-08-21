@@ -133,6 +133,47 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
           }
         }
       }
+
+      // Handle server actions
+      if (!isStaticMode && path === '/__server_actions') {
+        if (req.method !== 'POST') {
+          return new Response('Method not allowed', { status: 405 })
+        }
+        
+        try {
+          const { action, args } = await req.json()
+          const { getServerAction } = await import("../shared/serverFunction")
+          
+          const impl = getServerAction(action)
+          if (!impl) {
+            return new Response(
+              JSON.stringify({ error: `Server action ${action} not found` }),
+              { 
+                status: 404,
+                headers: { 'Content-Type': 'application/json' }
+              }
+            )
+          }
+          
+          const result = await impl(...args)
+          return new Response(
+            JSON.stringify({ data: result }),
+            { 
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            }
+          )
+        } catch (error) {
+          console.error('Server action error:', error)
+          return new Response(
+            JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+            { 
+              status: 500,
+              headers: { 'Content-Type': 'application/json' }
+            }
+          )
+        }
+      }
       
       if (!isStaticMode && path.startsWith(restartConfig.trpcEndpoint)) {
         const trpcResponse = await trpcHandler!.fetch(req, server)
@@ -183,6 +224,7 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
           }
           
           (globalThis as any).__SSR_PATH__ = path
+          const { Body, App } = await import("app/App")
           
           if (restartConfig.useReactServerComponents) {
             try {
@@ -190,24 +232,12 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
               await build()
               const { default: PageComponent } = await import(`../dist/routes/${routeName}.js`)
               const stream = await renderToReadableStream(
-                <html>
-                  <head>
-                    <meta charSet="utf-8" />
-                    <meta name="viewport" content="width=device-width, initial-scale=1" />
-                    <title>Restart</title>
-                    <link rel="stylesheet" href="/styles.css" />
-                    <link rel="icon" type="image/svg+xml" href="/react.svg" />
-                  </head>
-                  <body>
-                    <div id="root">
-                      <WouterRouter hook={() => [path, () => {}]}>
-                        <PageComponent />
-                      </WouterRouter>
-                    </div>
-                    <script type="module" src="/entrypoint.js" crossOrigin="anonymous"></script>
-                  </body>
-                </html>
-              )
+                <Body><PageComponent /></Body>
+                , {
+                onError(error) {
+                  console.error("RSC streaming error:", error)
+                }
+              })
               try {
                 await (stream as any).allReady
               } catch {}
@@ -228,10 +258,8 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
               // Fallback to normal SSR
             }
           }
-
-          const { Body } = await import("app/App")
           
-          const stream = await renderToReadableStream(<Body />, {
+          const stream = await renderToReadableStream(<Body><App /></Body>, {
             onError(err) {
               console.error("React SSR onError (/):", err)
             }
