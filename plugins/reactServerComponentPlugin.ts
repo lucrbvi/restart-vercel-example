@@ -95,6 +95,7 @@ function reactServerComponentPluginFn(mode: 'server' | 'client'): BunPlugin {
         const isRoute = /[\\/]routes[\\/]/.test(args.path)
         
         const localClientComponents = new Set<string>()
+        const localServerActions = new Set<string>()
 
         const transformClientCalls = ({ types: t }: typeof babel) => {
           return {
@@ -108,13 +109,21 @@ function reactServerComponentPluginFn(mode: 'server' | 'client'): BunPlugin {
                       try {
                         const id = innerPath.node.id?.name
                         const body = innerPath.node.body
-                        const hasDirective = (body?.directives && body.directives.some((d: any) => d.value?.value === 'use client'))
+                        const hasClientDirective = (body?.directives && body.directives.some((d: any) => d.value?.value === 'use client'))
                           || (Array.isArray(body?.body) && body.body[0]
                             && t.isExpressionStatement(body.body[0])
                             && t.isStringLiteral(body.body[0].expression)
                             && body.body[0].expression.value === 'use client')
-                        if (id && hasDirective) {
+                        const hasServerDirective = (body?.directives && body.directives.some((d: any) => d.value?.value === 'use server'))
+                          || (Array.isArray(body?.body) && body.body[0]
+                            && t.isExpressionStatement(body.body[0])
+                            && t.isStringLiteral(body.body[0].expression)
+                            && body.body[0].expression.value === 'use server')
+                        if (id && hasClientDirective) {
                           localClientComponents.add(id)
+                        }
+                        if (id && hasServerDirective) {
+                          localServerActions.add(id)
                         }
                       } catch {}
                     },
@@ -125,17 +134,26 @@ function reactServerComponentPluginFn(mode: 'server' | 'client'): BunPlugin {
                         const init = innerPath.node.init
                         if (t.isArrowFunctionExpression(init) || t.isFunctionExpression(init)) {
                           const body = init.body
-                          let hasDirective = false
+                          let hasClientDirective = false
+                          let hasServerDirective = false
                           if (t.isBlockStatement(body)) {
                             // @ts-ignore - fuck this error
-                            hasDirective = (body.directives && body.directives.some((d: any) => d.value?.value === 'use client'))
+                            hasClientDirective = (body.directives && body.directives.some((d: any) => d.value?.value === 'use client'))
                               || (Array.isArray(body.body) && body.body[0]
                                 && t.isExpressionStatement(body.body[0])
                                 && t.isStringLiteral(body.body[0].expression)
                                 && body.body[0].expression.value === 'use client')
+                            hasServerDirective = (body.directives && body.directives.some((d: any) => d.value?.value === 'use server'))
+                              || (Array.isArray(body.body) && body.body[0]
+                                && t.isExpressionStatement(body.body[0])
+                                && t.isStringLiteral(body.body[0].expression)
+                                && body.body[0].expression.value === 'use server') || false
                           }
-                          if (hasDirective) {
+                          if (hasClientDirective) {
                             localClientComponents.add(id.name)
+                          }
+                          if (hasServerDirective) {
+                            localServerActions.add(id.name)
                           }
                         }
                       } catch {}
@@ -156,57 +174,267 @@ function reactServerComponentPluginFn(mode: 'server' | 'client'): BunPlugin {
                 }
               },
               JSXElement(path: any) {
-                // Only replace with slots in server build
-                const transformJSXToSlots = mode === 'server'
-                if (!transformJSXToSlots) return
                 const openingElement = path.node.openingElement
                 if (!t.isJSXIdentifier(openingElement.name)) return
                 const componentName = openingElement.name.name
-                if (clientComponents.has(componentName) || localClientComponents.has(componentName)) {
-                  let componentId: string
-                  if (localClientComponents.has(componentName)) {
-                    const fileKey = computeRouteFileKey(args.path)
-                    componentId = `${fileKey}:${componentName}`
-                  } else {
-                    const mapped = clientComponentFileMap.get(componentName)
-                    componentId = mapped ? `${mapped}:${componentName}` : componentName
+                
+                if (mode === 'server') {
+                  // Handle client components in server mode - but allow server actions inside to be pre-rendered
+                  if (clientComponents.has(componentName) || localClientComponents.has(componentName)) {
+                    // Check if this client component contains server actions that need server-side rendering
+                    let hasServerActions = false
+                    
+                    // We need to analyze the component to see if it contains server actions
+                    // For now, let's execute it server-side if it contains any server actions
+                    if (localServerActions.size > 0) {
+                      // Execute the client component server-side to extract server action results
+                      hasServerActions = true
+                    }
+                    
+                    if (!hasServerActions) {
+                      let componentId: string
+                      if (localClientComponents.has(componentName)) {
+                        const fileKey = computeRouteFileKey(args.path)
+                        componentId = `${fileKey}:${componentName}`
+                      } else {
+                        const mapped = clientComponentFileMap.get(componentName)
+                        componentId = mapped ? `${mapped}:${componentName}` : componentName
+                      }
+                      const divElement = t.jsxElement(
+                        t.jsxOpeningElement(
+                          t.jsxIdentifier('div'),
+                          [
+                            t.jsxAttribute(
+                              t.jsxIdentifier('restart-react-client-component'),
+                              t.stringLiteral(componentId)
+                            )
+                          ]
+                        ),
+                        t.jsxClosingElement(t.jsxIdentifier('div')),
+                        path.node.children.length > 0
+                          ? path.node.children
+                          : [t.jsxElement(
+                              t.jsxOpeningElement(t.jsxIdentifier('div'), []),
+                              t.jsxClosingElement(t.jsxIdentifier('div')),
+                              [t.jsxText(`Loading ${componentName}...`)]
+                            )]
+                      )
+                      path.replaceWith(divElement)
+                      return
+                    }
+                    // If it has server actions, let it render server-side and then client will hydrate over it
                   }
-                  const divElement = t.jsxElement(
-                    t.jsxOpeningElement(
-                      t.jsxIdentifier('div'),
-                      [
-                        t.jsxAttribute(
-                          t.jsxIdentifier('restart-react-client-component'),
-                          t.stringLiteral(componentId)
-                        )
-                      ]
-                    ),
-                    t.jsxClosingElement(t.jsxIdentifier('div')),
-                    path.node.children.length > 0
-                      ? path.node.children
-                      : [t.jsxElement(
-                          t.jsxOpeningElement(t.jsxIdentifier('div'), []),
-                          t.jsxClosingElement(t.jsxIdentifier('div')),
-                          [t.jsxText(`Loading ${componentName}...`)]
-                        )]
-                  )
-                  path.replaceWith(divElement)
+                  
+                  // Handle server actions used as components (render them server-side)
+                  if (localServerActions.has(componentName)) {
+                    // Transform <ServerAction /> to {await ServerAction()}
+                    const callExpression = t.awaitExpression(
+                      t.callExpression(
+                        t.identifier(componentName),
+                        [] // No arguments for now, could be extended
+                      )
+                    )
+                    const jsxExpressionContainer = t.jsxExpressionContainer(callExpression)
+                    path.replaceWith(jsxExpressionContainer)
+                    return
+                  }
+                }
+                
+                if (mode === 'client') {
+                  // Remove server action JSX calls from client code
+                  if (localServerActions.has(componentName)) {
+                    // Replace with empty div or remove entirely
+                    const emptyDiv = t.jsxElement(
+                      t.jsxOpeningElement(t.jsxIdentifier('div'), []),
+                      t.jsxClosingElement(t.jsxIdentifier('div')),
+                      []
+                    )
+                    path.replaceWith(emptyDiv)
+                    return
+                  }
                 }
               },
               
+              // Transform server actions to serverFunction calls in server mode
               // Remove client component definitions from server code
+              // Remove server action definitions from client code
               FunctionDeclaration(path: any) {
-                const removeDefinitions = mode === 'server'
-                if (removeDefinitions && localClientComponents.has(path.node.id?.name)) {
+                const functionName = path.node.id?.name
+                
+                // Remove client components from server code
+                if (mode === 'server' && localClientComponents.has(functionName)) {
                   path.remove()
+                  return
+                }
+                
+                // Remove server actions from client code  
+                if (mode === 'client' && localServerActions.has(functionName)) {
+                  path.remove()
+                  return
+                }
+                
+                // Transform server actions to use serverFunction
+                if (mode === 'server' && localServerActions.has(functionName)) {
+                  if (functionName) {
+                    const params = path.node.params
+                    const body = path.node.body
+                    
+                    // Remove "use server" directive from body
+                    if (body.body && Array.isArray(body.body) && body.body[0] && 
+                        t.isExpressionStatement(body.body[0]) && 
+                        t.isStringLiteral(body.body[0].expression) &&
+                        body.body[0].expression.value === 'use server') {
+                      body.body.shift()
+                    }
+                    
+                    // Create serverFunction call using existing pattern
+                    const serverFunctionCall = t.variableDeclaration('const', [
+                      t.variableDeclarator(
+                        t.identifier(functionName),
+                        t.callExpression(
+                          t.identifier('serverFunction'),
+                          [
+                            t.stringLiteral(functionName),
+                            t.stringLiteral('mutation'),
+                            t.memberExpression(t.identifier('z'), t.identifier('any')),
+                            t.arrowFunctionExpression(
+                              [t.objectPattern([
+                                t.objectProperty(t.identifier('input'), t.identifier('input'))
+                              ])],
+                              params.length === 0 
+                                ? body
+                                : t.callExpression(
+                                    t.arrowFunctionExpression(params, body),
+                                    [t.identifier('input')]
+                                  )
+                            )
+                          ]
+                        )
+                      )
+                    ])
+                    
+                    path.replaceWith(serverFunctionCall)
+                    
+                    // Add imports
+                    const program = path.findParent((p: any) => p.isProgram())
+                    if (program) {
+                      // Add z import if needed
+                      const hasZodImport = program.node.body.some((node: any) => 
+                        t.isImportDeclaration(node) && 
+                        node.source.value === 'zod' &&
+                        node.specifiers.some((spec: any) => spec.imported?.name === 'z' || spec.local?.name === 'z')
+                      )
+                      if (!hasZodImport) {
+                        const zodImport = t.importDeclaration(
+                          [t.importSpecifier(t.identifier('z'), t.identifier('z'))],
+                          t.stringLiteral('zod')
+                        )
+                        program.unshiftContainer('body', zodImport)
+                      }
+                      
+                      // Add serverFunction import if needed
+                      const hasServerFunctionImport = program.node.body.some((node: any) => 
+                        t.isImportDeclaration(node) && 
+                        node.source.value.includes('serverFunction') &&
+                        node.specifiers.some((spec: any) => spec.imported?.name === 'serverFunction')
+                      )
+                      if (!hasServerFunctionImport) {
+                        const serverFunctionImport = t.importDeclaration(
+                          [t.importSpecifier(t.identifier('serverFunction'), t.identifier('serverFunction'))],
+                          t.stringLiteral('../shared/serverFunction')
+                        )
+                        program.unshiftContainer('body', serverFunctionImport)
+                      }
+                    }
+                  }
+                  return
                 }
               },
               
               VariableDeclaration(path: any) {
-                const removeDefinitions = mode === 'server'
-                if (!removeDefinitions) return
+                // Transform server actions (arrow functions) in server mode
+                if (mode === 'server') {
+                  path.node.declarations.forEach((declaration: any) => {
+                    if (declaration.id?.name && localServerActions.has(declaration.id.name)) {
+                      const functionName = declaration.id.name
+                      const init = declaration.init
+                      
+                      if (t.isArrowFunctionExpression(init) || t.isFunctionExpression(init)) {
+                        const params = init.params
+                        let body = init.body
+                        
+                        // Remove "use server" directive from body if it's a block statement
+                        if (t.isBlockStatement(body) && body.body && Array.isArray(body.body) && body.body[0] && 
+                            t.isExpressionStatement(body.body[0]) && 
+                            t.isStringLiteral(body.body[0].expression) &&
+                            body.body[0].expression.value === 'use server') {
+                          body.body.shift()
+                        }
+                        
+                        // Replace with serverFunction call
+                        declaration.init = t.callExpression(
+                          t.identifier('serverFunction'),
+                          [
+                            t.stringLiteral(functionName),
+                            t.stringLiteral('mutation'),
+                            t.memberExpression(t.identifier('z'), t.identifier('any')),
+                            t.arrowFunctionExpression(
+                              [t.objectPattern([
+                                t.objectProperty(t.identifier('input'), t.identifier('input'))
+                              ])],
+                              params.length === 0 
+                                ? body
+                                : t.callExpression(
+                                    t.arrowFunctionExpression(params, body),
+                                    [t.identifier('input')]
+                                  )
+                            )
+                          ]
+                        )
+                        
+                        // Add imports
+                        const program = path.findParent((p: any) => p.isProgram())
+                        if (program) {
+                          // Add z import if needed
+                          const hasZodImport = program.node.body.some((node: any) => 
+                            t.isImportDeclaration(node) && 
+                            node.source.value === 'zod' &&
+                            node.specifiers.some((spec: any) => spec.imported?.name === 'z' || spec.local?.name === 'z')
+                          )
+                          if (!hasZodImport) {
+                            const zodImport = t.importDeclaration(
+                              [t.importSpecifier(t.identifier('z'), t.identifier('z'))],
+                              t.stringLiteral('zod')
+                            )
+                            program.unshiftContainer('body', zodImport)
+                          }
+                          
+                          // Add serverFunction import if needed
+                          const hasServerFunctionImport = program.node.body.some((node: any) => 
+                            t.isImportDeclaration(node) && 
+                            node.source.value.includes('serverFunction') &&
+                            node.specifiers.some((spec: any) => spec.imported?.name === 'serverFunction')
+                          )
+                          if (!hasServerFunctionImport) {
+                            const serverFunctionImport = t.importDeclaration(
+                              [t.importSpecifier(t.identifier('serverFunction'), t.identifier('serverFunction'))],
+                              t.stringLiteral('../shared/serverFunction')
+                            )
+                            program.unshiftContainer('body', serverFunctionImport)
+                          }
+                        }
+                      }
+                    }
+                  })
+                }
+                
+                // Remove definitions based on mode
                 path.node.declarations.forEach((declaration: any, index: number) => {
-                  if (declaration.id?.name && localClientComponents.has(declaration.id.name)) {
+                  const name = declaration.id?.name
+                  const shouldRemove = (mode === 'server' && localClientComponents.has(name)) ||
+                                     (mode === 'client' && localServerActions.has(name))
+                  
+                  if (name && shouldRemove) {
                     if (path.node.declarations.length === 1) {
                       path.remove()
                     } else {

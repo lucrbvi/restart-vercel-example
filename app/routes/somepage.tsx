@@ -4,8 +4,11 @@ import { useState } from "react"
 function Click() {
     "use client"
     const [count, setCount] = useState(0)
+    
     return (
-        <button onClick={() => setCount(count + 1)}>{count} (I am a client component)</button>
+        <div>
+            <button onClick={() => setCount(count + 1)}>{count}</button>
+        </div>
     )
 }
 
