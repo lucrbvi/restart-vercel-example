@@ -62,7 +62,7 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
   console.log(`Starting server in ${mode} mode`)
 
   try {
-    await import("app/server")
+    await import("@/server/trpc")
   } catch (e) {
     console.warn("Warning: could not preload server functions:", e)
   }

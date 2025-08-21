@@ -63,6 +63,16 @@ function reactServerComponentPluginFn(mode: 'server' | 'client'): BunPlugin {
         const isAppFile = /[\\/]app[\\/]/.test(args.path)
         const isNodeModules = /[\\/]node_modules[\\/]/.test(args.path)
         const isDist = /[\\/]dist[\\/]/.test(args.path)
+        const isServerFile = /[\\/]app[\\/]server[\\/]/.test(args.path)
+        
+        // Exclude server files from client bundle
+        if (mode === 'client' && isServerFile) {
+          return {
+            contents: '',
+            loader: args.path.endsWith(".tsx") ? "tsx" : "jsx",
+          }
+        }
+        
         if (!isAppFile || isNodeModules || isDist) {
           return
         }
@@ -84,6 +94,30 @@ function reactServerComponentPluginFn(mode: 'server' | 'client'): BunPlugin {
           if (firstMeaningful === '"use client"' || firstMeaningful === "'use client'") {
             clientComponents.add(componentName)
             clientComponentFileMap.set(componentName, computeRouteFileKey(args.path))
+          }
+        }
+        
+        // Handle server files - exclude from client bundle completely
+        if (/[\\/]app[\\/]server[\\/]/.test(args.path)) {
+          // For server mode, process normally but mark as server-only
+          const lines = source.split('\n')
+          let firstMeaningful: string | null = null
+          for (const raw of lines) {
+            const line = raw.trim()
+            if (!line) continue
+            if (line.startsWith('//')) continue
+            firstMeaningful = line
+            break
+          }
+          // If file has "use server" directive, ensure it's only processed on server
+          if (firstMeaningful === '"use server"' || firstMeaningful === "'use server'") {
+            // This file should only exist on server side
+            if (mode === 'client') {
+              return {
+                contents: '',
+                loader: args.path.endsWith(".tsx") ? "tsx" : "jsx",
+              }
+            }
           }
         }
         
@@ -353,6 +387,68 @@ function reactServerComponentPluginFn(mode: 'server' | 'client'): BunPlugin {
                         program.unshiftContainer('body', callServerActionImport)
                       }
                     }
+                  }
+                }
+              },
+              
+              ImportDeclaration(path: any) {
+                // Transform imports from server files in client mode
+                if (mode === 'client') {
+                  const source = path.node.source.value
+                  if (source.includes('@/server/') || source.includes('../../server/') || source.includes('./server/')) {
+                    // Replace server imports with client-safe stubs
+                    const specifiers = path.node.specifiers
+                                         const newSpecifiers = specifiers.map((spec: any) => {
+                       if (t.isImportSpecifier(spec)) {
+                         const importedName = t.isIdentifier(spec.imported) ? spec.imported.name : 
+                                            t.isStringLiteral(spec.imported) ? spec.imported.value :
+                                            spec.local?.name
+                                                 // Create a stub function that calls the server action
+                         const stubFunction = t.variableDeclaration('const', [
+                           t.variableDeclarator(
+                             t.identifier(spec.local?.name || importedName),
+                             t.arrowFunctionExpression(
+                               [t.restElement(t.identifier('args'))],
+                               t.blockStatement([
+                                 t.returnStatement(
+                                   t.callExpression(
+                                     t.identifier('callServerAction'),
+                                     [
+                                       t.stringLiteral(importedName),
+                                       t.arrayExpression([t.spreadElement(t.identifier('args'))])
+                                     ]
+                                   )
+                                 )
+                               ])
+                             )
+                           )
+                         ])
+                        
+                        // Add the stub declaration after the import
+                        const program = path.findParent((p: any) => p.isProgram())
+                        if (program) {
+                          const importIndex = program.node.body.indexOf(path.node)
+                          program.node.body.splice(importIndex + 1, 0, stubFunction)
+                        }
+                        
+                        // Add import for callServerAction if not already present
+                        const hasCallServerActionImport = program.node.body.some((node: any) => 
+                          t.isImportDeclaration(node) && 
+                          node.source.value.includes('callServerAction')
+                        )
+                        if (!hasCallServerActionImport) {
+                          const callServerActionImport = t.importDeclaration(
+                            [t.importSpecifier(t.identifier('callServerAction'), t.identifier('callServerAction'))],
+                            t.stringLiteral('../../shared/serverFunction')
+                          )
+                          program.unshiftContainer('body', callServerActionImport)
+                        }
+                      }
+                      return spec
+                    })
+                    
+                    // Remove the original import
+                    path.remove()
                   }
                 }
               },

@@ -1,6 +1,6 @@
-import { serverFunction } from "../shared/serverFunction"
+import { serverFunction } from "../../shared/serverFunction"
 import { z } from "zod"
-import { newMiddleware } from "../server/middlewares"
+import { newMiddleware } from "../../server/middlewares"
 
 // You can declare serverFunctions and Middlewares anywhere in your codebase, even in the app folder! 
 // Our plugin will automatically clean up the codebase for you to not contaminate the client bundle with your secret server code.

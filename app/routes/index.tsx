@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getName, getServerTime } from '../server';
+import { getName, getServerTime } from '@/server/react';
 
 const serverFnAvailable = {
   getName: { name: 'getName', fn: getName, requiresInput: true },
@@ -50,7 +50,7 @@ const useStore = create<State>((set, get) => ({
     
     set({ loading: true, error: null, result: null });
     try {
-      const response = requiresInput ? await serverFn(input) : await (serverFn as () => Promise<string>)();
+      const response = requiresInput ? await serverFn(input) : await serverFn(undefined as any);
       set({ result: response });
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Unknown error' });

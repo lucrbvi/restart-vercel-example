@@ -86,6 +86,28 @@ export async function build() {
       })
     }
   }
+  
+  // Build server-side files (app/server/**/*.ts)
+  const cwd = process.cwd().replace(/\\/g, "/")
+  const serverGlob = new Bun.Glob(cwd + "/app/server/**/*.{ts,tsx}")
+  const serverEntryPoints: string[] = []
+  for (const match of serverGlob.scanSync({ cwd })) {
+    const abs = match.startsWith("/") ? match : `${cwd}/${match}`
+    serverEntryPoints.push(abs)
+  }
+  if (serverEntryPoints.length > 0) {
+    await Bun.build({
+      entrypoints: serverEntryPoints,
+      outdir: outdirPath + "/server",
+      plugins: [reactServerComponentPluginServer],
+      target: 'bun',
+      format: 'esm',
+      minify: false,
+      define: {
+        "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "production"),
+      },
+    })
+  }
   return
 }
 

@@ -1,4 +1,4 @@
-import { getServerTime } from "@/server"
+import { getServerTime } from "@/server/react"
 import { useState } from "react"
 
 // Native server action example
@@ -28,7 +28,7 @@ function Click() {
 }
 
 export default async function Page() {
-    const serverTime = await getServerTime(undefined as any)
+    const serverTime = await getServerTime()
     return (
         <div>
             <h1>There is some stuff here (I am server made)</h1>
