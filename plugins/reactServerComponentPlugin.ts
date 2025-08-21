@@ -165,15 +165,26 @@ function reactServerComponentPluginFn(mode: 'server' | 'client'): BunPlugin {
                   })
                 },
                 exit(path: any) {
-                  const shouldAddExports = mode === 'client'
-                  if (!shouldAddExports) return
-                  if (!isEntrypoint && localClientComponents.size > 0) {
-                    localClientComponents.forEach((componentName: string) => {
-                      const exportStatement = t.exportNamedDeclaration(null, [
-                        t.exportSpecifier(t.identifier(componentName), t.identifier(componentName))
-                      ])
-                      path.pushContainer('body', exportStatement)
-                    })
+                  if (!isEntrypoint) {
+                    // Export client components for client-side hydration
+                    if (mode === 'client' && localClientComponents.size > 0) {
+                      localClientComponents.forEach((componentName: string) => {
+                        const exportStatement = t.exportNamedDeclaration(null, [
+                          t.exportSpecifier(t.identifier(componentName), t.identifier(componentName))
+                        ])
+                        path.pushContainer('body', exportStatement)
+                      })
+                    }
+                    
+                    // Export server actions for server-side registration
+                    if (mode === 'server' && localServerActions.size > 0) {
+                      localServerActions.forEach((actionName: string) => {
+                        const exportStatement = t.exportNamedDeclaration(null, [
+                          t.exportSpecifier(t.identifier(actionName), t.identifier(actionName))
+                        ])
+                        path.pushContainer('body', exportStatement)
+                      })
+                    }
                   }
                 }
               },
@@ -308,6 +319,41 @@ function reactServerComponentPluginFn(mode: 'server' | 'client'): BunPlugin {
                     }
                   }
                   return
+                }
+              },
+              
+              CallExpression(path: any) {
+                // Transform server action calls in client mode
+                if (mode === 'client') {
+                  const callee = path.node.callee
+                  if (t.isIdentifier(callee) && localServerActions.has(callee.name)) {
+                    // Replace server action call with callServerAction
+                    const args = path.node.arguments
+                    const callServerActionCall = t.callExpression(
+                      t.identifier('callServerAction'),
+                      [
+                        t.stringLiteral(callee.name),
+                        t.arrayExpression(args)
+                      ]
+                    )
+                    path.replaceWith(callServerActionCall)
+                    
+                    // Add import for callServerAction
+                    const program = path.findParent((p: any) => p.isProgram())
+                    if (program) {
+                      const hasCallServerActionImport = program.node.body.some((node: any) => 
+                        t.isImportDeclaration(node) && 
+                        node.source.value.includes('callServerAction')
+                      )
+                      if (!hasCallServerActionImport) {
+                        const callServerActionImport = t.importDeclaration(
+                          [t.importSpecifier(t.identifier('callServerAction'), t.identifier('callServerAction'))],
+                          t.stringLiteral('../../shared/serverFunction')
+                        )
+                        program.unshiftContainer('body', callServerActionImport)
+                      }
+                    }
+                  }
                 }
               },
               

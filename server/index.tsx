@@ -230,7 +230,14 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
             try {
               const routeName = path.slice(1) || "index"
               await build()
-              const { default: PageComponent } = await import(`../dist/routes/${routeName}.js`)
+              const routeModule = await import(`../dist/routes/${routeName}.js`)
+              const { default: PageComponent } = routeModule
+              
+              // Register any server actions from this route
+              const { registerServerAction } = await import("../shared/serverFunction")
+              if (routeModule.serverGreeting) {
+                registerServerAction("serverGreeting", routeModule.serverGreeting)
+              }
               const stream = await renderToReadableStream(
                 <Body><PageComponent /></Body>
                 , {

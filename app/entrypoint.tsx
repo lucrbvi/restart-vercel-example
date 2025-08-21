@@ -8,7 +8,7 @@
 import { hydrateRoot, createRoot } from "react-dom/client"
 import { App } from "@/App"
 import { restartConfig } from "restart.config"
-import { Suspense, lazy, Component } from "react"
+import { Component } from "react"
 
 // Error boundary component for client components
 class ClientErrorBoundary extends Component<
