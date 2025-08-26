@@ -1,3 +1,8 @@
+<div style="text-align: center;">
+        <h1 style="color: #ff0000;">⚠️ Warning ⚠️</h1>
+        <p style="font-size: 16px; color: #333;">DO NOT USE RESTART IN PRODUCTION IT CAN HAVE SERIOUS SECURITY ISSUES, IT IS NOT (yet) TESTED ENOUGH</p>
+</div>
+
 # Restart: the open React framework
 
 Restart is a *minimal* and fully transparent full-stack React framework. All the code for Restart is fully accessible in the template and you can modify it as well.
@@ -8,7 +13,10 @@ Restart relly on some cool techs to work:
 3. <a href="https://trpc.io/" target="_blank">tRPC</a>: expose type-safe backend functions to the frontend
 4. <a href="https://tailwindcss.com/" target="_blank">Tailwind</a>: make css writing way easier
 5. <a href="https://github.com/molefrog/wouter" target="_blank">Wouter</a>: a minimal file-based router
-6. <a href="https://zustand.docs.pmnd.rs/" target="_blank">Zustand</a>: easy state-management solution for React
+
+<br/>
+
+If you dont like a library we are using you can easily delete it and get back to work.
 
 <br/>
 
