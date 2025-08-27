@@ -160,7 +160,7 @@ const TestBackend = () => {
 
   return (
     <div className="w-full max-w-md bg-black/80 backdrop-blur-sm text-green-400 p-6 rounded-lg font-mono border border-gray-700">
-      <h2 className="text-lg mb-4 text-white text-center">tRPC Backend Test</h2>
+      <h2 className="text-lg mb-4 text-white text-center">Backend Test</h2>
       
       <div className="space-y-4">
         <div>

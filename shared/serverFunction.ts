@@ -3,8 +3,9 @@ import type { AppRouter } from "server"
 import { registry } from "./trpcRegistry"
 import ZodTypeAny from "zod"
 
-// Server Actions Registry for native React server actions
-const serverActionRegistry = new Map<string, (...args: any[]) => any>()
+// Server Actions Registry for native React server actions (shared across bundles)
+const serverActionRegistry: Map<string, (...args: any[]) => any> =
+  (globalThis as any).__SERVER_ACTIONS__ ?? ((globalThis as any).__SERVER_ACTIONS__ = new Map())
 
 const trpc = typeof window !== "undefined"
   ? createTRPCProxyClient<AppRouter>({

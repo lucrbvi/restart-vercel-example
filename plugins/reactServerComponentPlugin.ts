@@ -392,7 +392,56 @@ function reactServerComponentPluginFn(mode: 'server' | 'client'): BunPlugin {
               },
               
               ImportDeclaration(path: any) {
-                // Transform imports from server files in client mode
+                // Transform imports from server files
+                if (mode === 'server') {
+                  const source = path.node.source.value
+                  if (source.includes('@/server/') || source.includes('../../server/') || source.includes('./server/')) {
+                    const specifiers = path.node.specifiers
+                    const registrations: any[] = []
+                    specifiers.forEach((spec: any) => {
+                      if (t.isImportSpecifier(spec)) {
+                        const importedName = t.isIdentifier(spec.imported) ? spec.imported.name : (t.isStringLiteral(spec.imported) ? spec.imported.value : spec.local?.name)
+                        const localName = spec.local?.name || importedName
+                        if (importedName && localName) {
+                          registrations.push(
+                            t.expressionStatement(
+                              t.callExpression(
+                                t.identifier('registerServerAction'),
+                                [
+                                  t.stringLiteral(importedName),
+                                  t.identifier(localName)
+                                ]
+                              )
+                            )
+                          )
+                        }
+                      }
+                    })
+
+                    if (registrations.length > 0) {
+                      const program = path.findParent((p: any) => p.isProgram())
+                      if (program) {
+                        const importIndex = program.node.body.indexOf(path.node)
+                        program.node.body.splice(importIndex + 1, 0, ...registrations)
+
+                        // Ensure registerServerAction import exists
+                        const hasRegisterImport = program.node.body.some((node: any) => 
+                          t.isImportDeclaration(node) && 
+                          node.source.value.includes('serverFunction') &&
+                          node.specifiers.some((spec: any) => spec.imported?.name === 'registerServerAction')
+                        )
+                        if (!hasRegisterImport) {
+                          const registerImport = t.importDeclaration(
+                            [t.importSpecifier(t.identifier('registerServerAction'), t.identifier('registerServerAction'))],
+                            t.stringLiteral('../../shared/serverFunction')
+                          )
+                          program.unshiftContainer('body', registerImport)
+                        }
+                      }
+                    }
+                  }
+                }
+
                 if (mode === 'client') {
                   const source = path.node.source.value
                   if (source.includes('@/server/') || source.includes('../../server/') || source.includes('./server/')) {
