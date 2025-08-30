@@ -6,6 +6,9 @@ function filePathToRoutePath(filePath: string): string {
   p = p.replace(/\.tsx$/, '')
   if (p === '/index') return '/'
   if (p.endsWith('/index')) return p.slice(0, -('/index'.length))
+  
+  p = p.replace(/\[([^\]]+)\]/g, ':$1')
+  
   return p
 }
 
