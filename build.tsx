@@ -37,14 +37,11 @@ export async function build() {
   
   if (existsSync("./public")) {
     try {
-      await mkdir("./dist/public", { recursive: true })
-      
       const files = await readdir("./public", { recursive: true })
-      
       for (const file of files) {
         if (typeof file === 'string') {
           const sourcePath = `./public/${file}`
-          const destPath = `./dist/public/${file}`
+          const destPath = `./dist/${file}`
           
           const destDir = destPath.substring(0, destPath.lastIndexOf('/'))
           if (!existsSync(destDir)) {

@@ -6,6 +6,7 @@
 import { serve, file } from "bun"
 import pathLib from "path"
 import type { Server } from "bun"
+import type { BunFile } from "bun"
 import { publicProcedure, router } from './trpc'
 import {createBunServeHandler} from 'trpc-bun-adapter'
 import { restartConfig } from "../restart.config"
@@ -14,7 +15,34 @@ import { registry } from "../shared/trpcRegistry"
 import { build, buildCss } from "../build"
 import { middlewares, type MiddlewareContext } from "./middlewares"
 import { renderToReadableStream } from "react-dom/server"
-import { existsSync } from "node:fs"
+
+function getContentType(ext: string): string {
+  const contentTypes: Record<string, string> = {
+    '.html': 'text/html',
+    '.txt': 'text/plain',
+    '.css': 'text/css',
+    '.js': 'application/javascript',
+    '.json': 'application/json',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf',
+    '.eot': 'application/vnd.ms-fontobject',
+    '.xml': 'application/xml',
+    '.pdf': 'application/pdf',
+    '.zip': 'application/zip',
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav'
+  }
+  return contentTypes[ext] || 'application/octet-stream'
+}
 
 // tRPC section
 
@@ -39,101 +67,79 @@ export function createAppRouter() {
 
 export type AppRouter = ReturnType<typeof createAppRouter>
 
-async function serveStaticFile(
-  filename: string, 
-  contentType: string, 
-  ctx: MiddlewareContext,
-  searchPaths: string[] = ["dist/public", "public"]
-): Promise<Response | null> {
-  for (const searchPath of searchPaths) {
-    const filePath = `${searchPath}/${filename}`
-    if (existsSync(filePath)) {
-      const publicFile = file(filePath)
-      let res = new Response(publicFile, {
-        headers: { "Content-Type": contentType }
-      })
-      
-      for (const m of middlewares) {
-        if (m.onResponse) {
-          res = await m.onResponse(ctx, res)
-        }
-      }
-      return res
-    }
-  }
-  return null
-}
-
 // server section
 
-if (import.meta.main) { // it stop the server to run if we import `Body()`
-  const argv = Bun.argv.slice(2)
-  const isStaticMode = argv.includes("--static")
-  const isDevMode = argv.includes("--dev")
-  const mode = isStaticMode ? "static" : (isDevMode ? "dev" : "prod")
+if (!import.meta.main) {
+  throw new Error("This file must be executed directly with Bun (ex: `bun server/index.tsx`)");
+}
 
-  if (!isDevMode && restartConfig.useReactScan) {
-    restartConfig.useReactScan = false
-  }
+const argv = Bun.argv.slice(2)
+const isStaticMode = argv.includes("--static")
+const isDevMode = argv.includes("--dev")
+const mode = isStaticMode ? "static" : (isDevMode ? "dev" : "prod")
 
-  // Ensure environment hints for libraries that read NODE_ENV
-  try {
-    if (isDevMode) {
-      process.env.NODE_ENV = "development"
-    } else {
-      process.env.NODE_ENV = "production"
-    }
-  } catch {}
+if (!isDevMode && restartConfig.useReactScan) {
+  restartConfig.useReactScan = false
+}
 
-  console.log(`Starting server in ${mode} mode`)
-
-  try {
-    await import("@/server/index")
-  } catch (e) {
-    console.warn("Warning: could not preload server functions:", e)
-  }
-
-  const trpcHandler = !isStaticMode
-    ? createBunServeHandler({
-        router: createAppRouter(),
-        endpoint: restartConfig.trpcEndpoint,
-        responseMeta() {
-          return {
-            status: 200,
-            headers: {
-            }
-          }
-        },
-      })
-    : null
-
-  if (isStaticMode) {
-    console.log("Static: skipping client build")
+// Ensure environment hints for libraries that read NODE_ENV
+try {
+  if (isDevMode) {
+    process.env.NODE_ENV = "development"
   } else {
-    if (isDevMode) {
-      try {
-        await build()
-        await buildCss(true)
-      } catch (e) {
-        console.error("Build error:", e)
-      }
-    } else {
-      console.log("Building client...")
-      try{
-        await build()
-        await buildCss(false)
-        console.log("Client built")
-      } catch (e) {
-        console.error("Building error:", e)
-        process.exit(1)
-      }
+    process.env.NODE_ENV = "production"
+  }
+} catch {}
+
+console.log(`Starting server in ${mode} mode`)
+
+try {
+  await import("@/server/index")
+} catch (e) {
+  console.warn("Warning: could not preload server functions:", e)
+}
+
+const trpcHandler = !isStaticMode
+  ? createBunServeHandler({
+      router: createAppRouter(),
+      endpoint: restartConfig.trpcEndpoint,
+      responseMeta() {
+        return {
+          status: 200,
+          headers: {
+          }
+        }
+      },
+    })
+  : null
+
+if (isStaticMode) {
+  console.log("Static: skipping client build")
+} else {
+  if (isDevMode) {
+    try {
+      await build()
+      await buildCss(true)
+    } catch (e) {
+      console.error("Build error:", e)
+    }
+  } else {
+    console.log("Building client...")
+    try{
+      await build()
+      await buildCss(false)
+      console.log("Client built")
+    } catch (e) {
+      console.error("Building error:", e)
+      process.exit(1)
     }
   }
+}
 
-  const server = serve({
-    port: restartConfig.port,
-    development: isDevMode,
-    async fetch(this: Server, req: Request, server: Server): Promise<Response> {
+export const server = function(){return serve({
+  port: restartConfig.port,
+  development: isDevMode,
+  async fetch(this: Server, req: Request, server: Server): Promise<Response> {
       const path = new URL(req.url).pathname
       const ctx: MiddlewareContext = {
         req,
@@ -210,6 +216,48 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
           }
         }
         return finalRes
+      }
+
+      if (path !== "/" && !path.startsWith(restartConfig.trpcEndpoint) && !path.startsWith("/__server_actions")) {
+        const cwd = process.cwd()
+        
+        const searchPaths = [
+          pathLib.join(cwd, "dist", "public", path),
+          pathLib.join(cwd, "public", path),
+          pathLib.join(cwd, "dist", path),
+          pathLib.join(cwd, path)
+        ]
+        
+        let staticFile: BunFile | null = null
+        
+        for (const filePath of searchPaths) {
+          try {
+            const file = Bun.file(filePath)
+            if (file.size > 0) {
+              staticFile = file
+              break
+            }
+          } catch {}
+        }
+        
+        if (staticFile) {
+          const ext = pathLib.extname(path).toLowerCase()
+          const contentType = getContentType(ext)
+          
+          let res = new Response(staticFile, {
+            headers: {
+              "Content-Type": contentType,
+              "Cache-Control": isDevMode ? "no-cache" : "public, max-age=3600"
+            }
+          })
+          
+          for (const m of middlewares) {
+            if (m.onResponse) {
+              res = await m.onResponse(ctx, res)
+            }
+          }
+          return res
+        }
       }
 
       // check available routes from app/routes
@@ -377,59 +425,34 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
             },
           })
           for (const m of middlewares) {
-            if (m.onResponse) {
-              res = await m.onResponse(ctx, res)
-            }
+          if (m.onResponse) {
+            res = await m.onResponse(ctx, res)
           }
-          return res
-        } catch (e) {
-          console.error("SSR error:", e)
-          let res = new Response("Server Error (500)", { status: 500 })
-          for (const m of middlewares) {
-            if (m.onResponse) {
-              res = await m.onResponse(ctx, res)
-            }
+        }
+        return res
+      } catch (e) {
+        console.error("SSR error:", e)
+        let res = new Response("Server Error (500)", { status: 500 })
+        for (const m of middlewares) {
+          if (m.onResponse) {
+            res = await m.onResponse(ctx, res)
           }
-          return res
         }
-      }
-
-      const fileExtensions = [
-        { ext: ".html", contentType: "text/html", searchPaths: ["dist", "public"] },
-        { ext: ".txt", contentType: "text/plain", searchPaths: ["public", "dist"] },
-        { ext: ".css", contentType: "text/css", searchPaths: ["dist", "public"] },
-        { ext: ".svg", contentType: "image/svg+xml", searchPaths: ["dist/public", "public"] },
-        { ext: ".js", contentType: "application/javascript", searchPaths: ["dist", "public"] }
-      ]
-
-      for (const { ext, contentType, searchPaths } of fileExtensions) {
-        if (path.endsWith(ext)) {
-          const filename = path.split("/").pop()
-          if (filename) {
-            const response = await serveStaticFile(filename, contentType, ctx, searchPaths)
-            if (response) {
-              return response
-            }
-          }
-          break
-        }
-      }
-      
-      let res = new Response("Page not found (404)", { status: 404 })
-      for (const m of middlewares) {
-        if (m.onResponse) {
-          res = await m.onResponse(ctx, res)
-        }
-      }
-      return res
-      
-    },
-    websocket: {
-      message: () => {
-        console.log("websocket message")
+        return res
       }
     }
-  })
 
-  console.log(`✅ Web server online on ${server.url}`)
-}
+      
+      
+    let res = new Response("Page not found (404)", { status: 404 })
+    for (const m of middlewares) {
+      if (m.onResponse) {
+        res = await m.onResponse(ctx, res)
+      }
+    }
+    return res
+      
+  }
+})}
+
+console.log(`✅ Web server online on ${server().url}`)

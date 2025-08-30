@@ -11,5 +11,6 @@
   ],
   "outputDirectory": "dist",
   "buildCommand": "bun run build",
-  "installCommand": "bun install"
+  "installCommand": "bun install",
+  "public": true
 }
