@@ -82,14 +82,11 @@ if (!isDevMode && restartConfig.useReactScan) {
   restartConfig.useReactScan = false
 }
 
-// Ensure environment hints for libraries that read NODE_ENV
-try {
-  if (isDevMode) {
-    process.env.NODE_ENV = "development"
-  } else {
-    process.env.NODE_ENV = "production"
-  }
-} catch {}
+if (isDevMode) {
+  process.env.NODE_ENV = "development"
+} else {
+  process.env.NODE_ENV = "production"
+}
 
 console.log(`Starting server in ${mode} mode`)
 

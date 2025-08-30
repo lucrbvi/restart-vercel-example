@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --hot ./server/index.tsx --dev",
+    "dev": "bun --watch ./server/index.tsx --dev",
     "build": "bun run build.tsx",
     "static": "bun run ./server/index.tsx --static",
     "prod": "bun run ./server/index.tsx"
