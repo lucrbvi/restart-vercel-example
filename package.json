@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --hot ./server/index.tsx --dev",
-    "build": "bun-vercel build.tsx",
+    "build": "bun run build.tsx",
     "static": "bun run ./server/index.tsx --static",
     "prod": "bun run ./server/index.tsx"
   },
@@ -28,7 +28,6 @@
     "@types/bun": "latest",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "bun-vercel": "^1.0.0-alpha.5",
     "globals": "^16.3.0"
   }
 }

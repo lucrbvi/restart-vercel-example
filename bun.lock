@@ -22,7 +22,6 @@
         "@types/bun": "latest",
         "@types/react": "^19",
         "@types/react-dom": "^19",
-        "bun-vercel": "^1.0.0-alpha.5",
         "globals": "^16.3.0",
       },
     },
@@ -161,8 +160,6 @@
     "bun-plugin-tailwind": ["bun-plugin-tailwind@0.0.15", "", { "peerDependencies": { "typescript": "^5.0.0" } }, "sha512-qtAXMNGG4R0UGGI8zWrqm2B7BdXqx48vunJXBPzfDOHPA5WkRUZdTSbE7TFwO4jLhYqSE23YMWsM9NhE6ovobw=="],
 
     "bun-types": ["bun-types@1.2.20", "", { "dependencies": { "@types/node": "*" }, "peerDependencies": { "@types/react": "^19" } }, "sha512-pxTnQYOrKvdOwyiyd/7sMt9yFOenN004Y6O4lCcCUoKVej48FS5cvTw9geRaEcB9TsDZaJKAxPTVvi8tFsVuXA=="],
-
-    "bun-vercel": ["bun-vercel@1.0.0-alpha.5", "", { "bin": { "bun-vercel": "build.sh" } }, "sha512-QhaB/Go4XCSglIZtzTw0gorjkcJ5rUCfUvrc6lbS2BuzoTxap7KMmnG1zT0P/jnRhfSAoVryhpHmtGUJ2+e2+A=="],
 
     "caniuse-lite": ["caniuse-lite@1.0.30001735", "", {}, "sha512-EV/laoX7Wq2J9TQlyIXRxTJqIw4sxfXS4OYgudGxBYRuTv0q7AM6yMEpU/Vo1I94thg9U6EZ2NfZx9GJq83u7w=="],
 
