@@ -8,7 +8,7 @@ export default async function PostPage() {
   if (isNaN(id) || id < 0) {
     return (
       <div className="bg-neutral-900 text-white flex flex-col items-center justify-center h-screen">
-        <h1 className="text-4xl font-bold">Article non trouvé</h1>
+        <h1 className="text-4xl font-bold">Post not found</h1>
       </div>
     );
   }
@@ -18,7 +18,7 @@ export default async function PostPage() {
   if (!post) {
     return (
       <div className="bg-neutral-900 text-white flex flex-col items-center justify-center h-screen">
-        <h1 className="text-4xl font-bold">Article non trouvé</h1>
+        <h1 className="text-4xl font-bold">Post not found</h1>
       </div>
     );
   }

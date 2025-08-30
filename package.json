@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch ./server/index.tsx --dev",
-    "build": "bun run build.tsx",
+    "build": "NODE_ENV=production bun run build.tsx",
     "static": "bun run ./server/index.tsx --static",
     "prod": "bun run ./server/index.tsx"
   },
@@ -26,9 +26,9 @@
     "@trpc/client": "^11.4.4",
     "@trpc/server": "^11.4.4",
     "@types/babel__core": "^7.20.5",
-    "@types/bun": "latest",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/bun": "^1.2.21",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
     "globals": "^16.3.0"
   }
 }

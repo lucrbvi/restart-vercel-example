@@ -11,6 +11,8 @@ import { restartConfig as originalRestartConfig } from "./restart.config"
 import { mkdir, readdir } from "node:fs/promises"
 import { existsSync } from "node:fs"
 
+const isVercel = process.env.VERCEL === "1" || process.env.VERCEL_ENV
+
 // Disable react-scan during build for production
 const restartConfig = {
   ...originalRestartConfig,
@@ -109,10 +111,23 @@ export async function build() {
         target: 'bun',
         format: 'esm',
         minify: false,
+        packages: "bundle",
         define: {
           "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "production"),
         },
       })
+      
+      await Bun.build({
+        entrypoints: ["./server/handler.tsx"],
+        outdir: outdirPath + "/server",
+        target: "bun",
+        format: "esm",
+        minify: true,
+        packages: "bundle",
+        define: {
+          "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "production"),
+        },
+      });
     }
   }
   

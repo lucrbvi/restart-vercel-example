@@ -1,3 +1,5 @@
-import { server } from "../server/index.tsx";
+import { fetchHandler } from '../dist/server/handler.js';
 
-server()
+export default (req: Request) => {
+  return fetchHandler(req, null as any);
+};

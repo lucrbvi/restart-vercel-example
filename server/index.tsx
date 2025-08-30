@@ -1,53 +1,15 @@
-/**
- * This server is used as a *dev* server.
- * You can also use it as a production server like a good old consistant server.
- */
-
-import { serve, file } from "bun"
-import pathLib from "path"
+import { serve} from "bun"
 import type { Server } from "bun"
-import type { BunFile } from "bun"
 import { publicProcedure, router } from './trpc'
-import {createBunServeHandler} from 'trpc-bun-adapter'
 import { restartConfig } from "../restart.config"
-import ZodTypeAny from "zod"
 import { registry } from "../shared/trpcRegistry"
 import { build, buildCss } from "../build"
-import { middlewares, type MiddlewareContext } from "./middlewares"
-import { renderToReadableStream } from "react-dom/server"
-
-function getContentType(ext: string): string {
-  const contentTypes: Record<string, string> = {
-    '.html': 'text/html',
-    '.txt': 'text/plain',
-    '.css': 'text/css',
-    '.js': 'application/javascript',
-    '.json': 'application/json',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.gif': 'image/gif',
-    '.svg': 'image/svg+xml',
-    '.ico': 'image/x-icon',
-    '.woff': 'font/woff',
-    '.woff2': 'font/woff2',
-    '.ttf': 'font/ttf',
-    '.eot': 'application/vnd.ms-fontobject',
-    '.xml': 'application/xml',
-    '.pdf': 'application/pdf',
-    '.zip': 'application/zip',
-    '.mp4': 'video/mp4',
-    '.webm': 'video/webm',
-    '.mp3': 'audio/mpeg',
-    '.wav': 'audio/wav'
-  }
-  return contentTypes[ext] || 'application/octet-stream'
-}
+import { fetchHandler } from "./handler"
 
 // tRPC section
 
 type Kind = "query" | "mutation"
-type Entry = { name: string; kind: Kind; input: ZodTypeAny; resolve: (opts: { input: any }) => any }
+type Entry = { name: string; kind: Kind; input: any; resolve: (opts: { input: any }) => any }
 
 function registerFunction(entry: Entry) {
   if (entry.kind === "query") {
@@ -70,7 +32,9 @@ export type AppRouter = ReturnType<typeof createAppRouter>
 // server section
 
 if (!import.meta.main) {
-  throw new Error("This file must be executed directly with Bun (ex: `bun server/index.tsx`)");
+  throw new Error(
+    "This file is for direct execution only (e.g., `bun run dev`)"
+  );
 }
 
 const argv = Bun.argv.slice(2)
@@ -96,21 +60,8 @@ try {
   console.warn("Warning: could not preload server functions:", e)
 }
 
-const trpcHandler = !isStaticMode
-  ? createBunServeHandler({
-      router: createAppRouter(),
-      endpoint: restartConfig.trpcEndpoint,
-      responseMeta() {
-        return {
-          status: 200,
-          headers: {
-          }
-        }
-      },
-    })
-  : null
-
 if (isStaticMode) {
+  process.env.NODE_ENV = "development";
   console.log("Static: skipping client build")
 } else {
   if (isDevMode) {
@@ -121,6 +72,7 @@ if (isStaticMode) {
       console.error("Build error:", e)
     }
   } else {
+    process.env.NODE_ENV = "production";
     console.log("Building client...")
     try{
       await build()
@@ -133,353 +85,14 @@ if (isStaticMode) {
   }
 }
 
-export const server = function(){return serve({
-  port: restartConfig.port,
-  development: isDevMode,
-  async fetch(this: Server, req: Request, server: Server): Promise<Response> {
-      const path = new URL(req.url).pathname
-      const ctx: MiddlewareContext = {
-        req,
-        server,
-        path,
-        isDevMode,
-        isStaticMode,
-        state: {},
-      }
+export function server(): Server {
+  return serve({
+    port: restartConfig.port,
+    development: isDevMode,
+    fetch: fetchHandler,
+  });
+};
 
-      for (const m of middlewares) {
-        if (m.onRequest) {
-          const maybeResponse = await m.onRequest(ctx)
-          if (maybeResponse) {
-            let res = maybeResponse
-            for (const mm of middlewares) {
-              if (mm.onResponse) {
-                res = await mm.onResponse(ctx, res)
-              }
-            }
-            return res
-          }
-        }
-      }
+const serveInstance = server();
 
-      // Handle server actions
-      if (!isStaticMode && path === '/__server_actions') {
-        if (req.method !== 'POST') {
-          return new Response('Method not allowed', { status: 405 })
-        }
-        
-        try {
-          const { action, args } = await req.json()
-          const { getServerAction } = await import("../shared/serverFunction")
-          
-          const impl = getServerAction(action)
-          if (!impl) {
-            return new Response(
-              JSON.stringify({ error: `Server action ${action} not found` }),
-              { 
-                status: 404,
-                headers: { 'Content-Type': 'application/json' }
-              }
-            )
-          }
-          
-          const result = await impl(...args)
-          return new Response(
-            JSON.stringify({ data: result }),
-            { 
-              status: 200,
-              headers: { 'Content-Type': 'application/json' }
-            }
-          )
-        } catch (error) {
-          console.error('Server action error:', error)
-          return new Response(
-            JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-            { 
-              status: 500,
-              headers: { 'Content-Type': 'application/json' }
-            }
-          )
-        }
-      }
-      
-      if (!isStaticMode && path.startsWith(restartConfig.trpcEndpoint)) {
-        const trpcResponse = await trpcHandler!.fetch(req, server)
-        const res = trpcResponse ?? new Response("Not found (404)", { status: 404 })
-        let finalRes = res
-        for (const m of middlewares) {
-          if (m.onResponse) {
-            finalRes = await m.onResponse(ctx, finalRes)
-          }
-        }
-        return finalRes
-      }
-
-      if (path !== "/" && !path.startsWith(restartConfig.trpcEndpoint) && !path.startsWith("/__server_actions")) {
-        const cwd = process.cwd()
-        
-        const searchPaths = [
-          pathLib.join(cwd, "dist", "public", path),
-          pathLib.join(cwd, "public", path),
-          pathLib.join(cwd, "dist", path),
-          pathLib.join(cwd, path)
-        ]
-        
-        let staticFile: BunFile | null = null
-        
-        for (const filePath of searchPaths) {
-          try {
-            const file = Bun.file(filePath)
-            if (file.size > 0) {
-              staticFile = file
-              break
-            }
-          } catch {}
-        }
-        
-        if (staticFile) {
-          const ext = pathLib.extname(path).toLowerCase()
-          const contentType = getContentType(ext)
-          
-          let res = new Response(staticFile, {
-            headers: {
-              "Content-Type": contentType,
-              "Cache-Control": isDevMode ? "no-cache" : "public, max-age=3600"
-            }
-          })
-          
-          for (const m of middlewares) {
-            if (m.onResponse) {
-              res = await m.onResponse(ctx, res)
-            }
-          }
-          return res
-        }
-      }
-
-      async function importRouteModule(routeName: string) {
-        let routeModule
-        
-        try {
-          routeModule = await import(`../dist/routes/${routeName}.js`)
-        } catch {
-          try {
-            routeModule = await import(`../dist/routes/${routeName}/index.js`)
-          } catch {
-            const routeParts = routeName.split('/')
-            const lastPart = routeParts[routeParts.length - 1]
-            
-            if (!isNaN(Number(lastPart))) {
-              const dynamicRouteName = routeParts.slice(0, -1).join('/') + '/[id]'
-              try {
-                routeModule = await import(`../dist/routes/${dynamicRouteName}.js`)
-              } catch {
-                routeModule = await import(`../dist/routes/${dynamicRouteName}/index.js`)
-              }
-            }
-          }
-        }
-        
-        return routeModule
-      }
-
-      // check available routes from app/routes
-      function computeKnownRoutes(): string[] {
-        const cwd = process.cwd().replace(/\\/g, "/")
-        const result: string[] = []
-        
-        // Scan for both files and directories
-        const fileGlob = new Bun.Glob(cwd + "/app/routes/**/*.tsx")
-        const dirGlob = new Bun.Glob(cwd + "/app/routes/**/")
-        
-        // Process files
-        for (const match of fileGlob.scanSync({ cwd })) {
-          const abs = match.startsWith("/") ? match : pathLib.resolve(cwd, match)
-          const rel = abs.replace(/\\/g, "/").replace(cwd + "/app/routes", "")
-          let route = rel.replace(/\.tsx$/, "")
-          if (route === "/index") route = "/"
-          else if (route.endsWith("/index")) route = route.slice(0, -("/index".length))
-          
-          route = route.replace(/\[([^\]]+)\]/g, ':$1')
-          
-          result.push(route)
-        }
-        
-        // Process directories (check for index.tsx)
-        for (const match of dirGlob.scanSync({ cwd })) {
-          const abs = match.startsWith("/") ? match : pathLib.resolve(cwd, match)
-          const rel = abs.replace(/\\/g, "/").replace(cwd + "/app/routes", "")
-          
-          // Check if directory has index.tsx
-          const indexPath = abs + "/index.tsx"
-          if (Bun.file(indexPath).size > 0) {
-            let route = rel
-            if (route === "/") route = "/"
-            else if (route.endsWith("/")) route = route.slice(0, -1)
-            result.push(route)
-          }
-        }
-        
-        return Array.from(new Set(result)).sort((a, b) => b.length - a.length)
-      }
-
-      const knownRoutes = isDevMode ? computeKnownRoutes() : (globalThis as any).__KNOWN_ROUTES__ ?? ((globalThis as any).__KNOWN_ROUTES__ = computeKnownRoutes())
-
-      const isKnownClientRoute = knownRoutes.some((route: string) => {
-        if (route === path) return true
-        
-        if (route.includes(':')) {
-          const routeParts = route.split('/')
-          const pathParts = path.split('/')
-          
-          if (routeParts.length !== pathParts.length) return false
-          
-          return routeParts.every((part: string, index: number) => {
-            if (part.startsWith(':')) return true
-            return part === pathParts[index]
-          })
-        }
-        
-        return false
-      })
-
-      if (path === "/" || isKnownClientRoute) {
-        try {
-          if (isStaticMode) {
-            // In static mode, still generate content per route for RSC
-            if (restartConfig.useReactServerComponents) {
-              const routeName = path.slice(1) || "index"
-              const routeModule = await importRouteModule(routeName)
-              
-              const { default: PageComponent } = routeModule
-              const { Body } = await import("app/App")
-              
-              const stream = await renderToReadableStream(
-                <Body><PageComponent /></Body>
-                , {
-                onError(error) {
-                  console.error("RSC static rendering error:", error)
-                }
-              })
-              try {
-                await (stream as any).allReady
-              } catch {}
-              let res = new Response(stream, {
-                headers: {
-                  "Content-Type": "text/html",
-                  "Cache-Control": "public, max-age=3600"
-                },
-              })
-              for (const m of middlewares) {
-                if (m.onResponse) {
-                  res = await m.onResponse(ctx, res)
-                }
-              }
-              return res
-            } else {
-              // Traditional static mode - serve index.html for all routes
-              const html = file("dist/index.html")
-              let res = new Response(html, {
-                headers: {
-                  "Content-Type": "text/html",
-                }
-              })
-              for (const m of middlewares) {
-                if (m.onResponse) {
-                  res = await m.onResponse(ctx, res)
-                }
-              }
-              return res
-            }
-          }
-          
-          (globalThis as any).__SSR_PATH__ = path
-          const { Body, App } = await import("app/App")
-          
-          if (restartConfig.useReactServerComponents) {
-            try {
-              const routeName = path.slice(1) || "index"
-              await build()
-              const routeModule = await importRouteModule(routeName)
-              
-              const { default: PageComponent } = routeModule
-              
-              // Register any server actions from this route
-              const { registerServerAction } = await import("../shared/serverFunction")
-              if (routeModule.serverGreeting) {
-                registerServerAction("serverGreeting", routeModule.serverGreeting)
-              }
-              const stream = await renderToReadableStream(
-                <Body><PageComponent /></Body>
-                , {
-                onError(error) {
-                  console.error("RSC streaming error:", error)
-                }
-              })
-              try {
-                await (stream as any).allReady
-              } catch {}
-              let res = new Response(stream, {
-                headers: {
-                  "Content-Type": "text/html",
-                  "Cache-Control": isDevMode ? "no-cache" : "public, max-age=0"
-                },
-              })
-              for (const m of middlewares) {
-                if (m.onResponse) {
-                  res = await m.onResponse(ctx, res)
-                }
-              }
-              return res
-            } catch (e) {
-              console.error("RSC rendering error:", e)
-              // Fallback to normal SSR
-            }
-          }
-          
-          const stream = await renderToReadableStream(<Body><App /></Body>, {
-            onError(err) {
-              console.error("React SSR onError (/):", err)
-            }
-          })
-          try {
-            await (stream as any).allReady
-          } catch {}
-          let res = new Response(stream, {
-            headers: {
-              "Content-Type": "text/html",
-              "Cache-Control": isDevMode ? "no-cache" : "public, max-age=0"
-            },
-          })
-          for (const m of middlewares) {
-          if (m.onResponse) {
-            res = await m.onResponse(ctx, res)
-          }
-        }
-        return res
-      } catch (e) {
-        console.error("SSR error:", e)
-        let res = new Response("Server Error (500)", { status: 500 })
-        for (const m of middlewares) {
-          if (m.onResponse) {
-            res = await m.onResponse(ctx, res)
-          }
-        }
-        return res
-      }
-    }
-
-      
-      
-    let res = new Response("Page not found (404)", { status: 404 })
-    for (const m of middlewares) {
-      if (m.onResponse) {
-        res = await m.onResponse(ctx, res)
-      }
-    }
-    return res
-      
-  }
-})}
-
-console.log(`✅ Web server online on ${server().url}`)
+console.log(`✅ Web server online on ${serveInstance.url}`)
