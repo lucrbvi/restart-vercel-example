@@ -8,6 +8,8 @@ import { file, write } from "bun"
 import { renderToString } from 'react-dom/server'
 import { renderToReadableStream } from 'react-dom/server'
 import { restartConfig as originalRestartConfig } from "./restart.config"
+import { mkdir, readdir } from "node:fs/promises"
+import { existsSync } from "node:fs"
 
 // Disable react-scan during build for production
 const restartConfig = {
@@ -32,6 +34,31 @@ export async function build() {
   } catch (e) {
     console.warn("CSS build failed:", e)
   }
+  
+  if (existsSync("./public")) {
+    try {
+      await mkdir("./dist/public", { recursive: true })
+      
+      const files = await readdir("./public", { recursive: true })
+      
+      for (const file of files) {
+        if (typeof file === 'string') {
+          const sourcePath = `./public/${file}`
+          const destPath = `./dist/public/${file}`
+          
+          const destDir = destPath.substring(0, destPath.lastIndexOf('/'))
+          if (!existsSync(destDir)) {
+            await mkdir(destDir, { recursive: true })
+          }
+          
+          await Bun.write(destPath, await Bun.file(sourcePath).arrayBuffer())
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to copy public files:", e)
+    }
+  }
+  
   await Bun.build({
     entrypoints: [entrypointPath],
     outdir: outdirPath,

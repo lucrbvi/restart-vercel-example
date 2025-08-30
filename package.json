@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "bun --hot ./server/index.tsx --dev",
     "build": "bun run build.tsx",
+    "build:vercel": "vercel build",
     "static": "bun run ./server/index.tsx --static",
     "prod": "bun run ./server/index.tsx"
   },

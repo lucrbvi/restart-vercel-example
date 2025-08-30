@@ -412,7 +412,7 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
 
       if (path.endsWith(".svg")) {
         const Filepath = path.split("/").pop()
-        const publicFile = file("public/" + Filepath)
+        const publicFile = file("dist/public/" + Filepath)
         let res = new Response(publicFile, {
           headers: { "Content-Type": "image/svg+xml"}
         })

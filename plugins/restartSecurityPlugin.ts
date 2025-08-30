@@ -22,9 +22,8 @@ function restartSecurityPluginFn(): BunPlugin {
 
         let middlewares: boolean = false
         const usesConfig: boolean = source.includes("restart.config")
-        const hasServerImports: boolean = /import.*from.*["'](\.\.\/)?server\//.test(source)
 
-        if (!source.includes("serverFunction") && !source.includes("newMiddleware") && !source.includes("middlewares") && !usesConfig && !hasServerImports) {
+        if (!source.includes("serverFunction") && !source.includes("newMiddleware") && !source.includes("middlewares") && !usesConfig) {
           return
         }
 
@@ -48,7 +47,6 @@ function restartSecurityPluginFn(): BunPlugin {
                 let transformedSomething = false
                 let configTouched = false
                 const configLocalNames: string[] = []
-                const serverFunctionNames = new Set<string>()
 
                 programPath.get("body").forEach((p: any) => {
                   if (!p.isImportDeclaration()) return
@@ -71,17 +69,8 @@ function restartSecurityPluginFn(): BunPlugin {
                   if (middlewares && src && /(^|\/)server\/middlewares$/.test(src)) {
                     p.remove()
                   }
-                  if (src && /(^|\/)server\//.test(src)) {
-                    // Collect server function names before removing the import
-                    for (const s of p.node.specifiers) {
-                      if (t.isImportSpecifier(s) && t.isIdentifier(s.imported)) {
-                        serverFunctionNames.add(s.imported.name)
-                      }
-                    }
-                    p.remove()
-                  }
                   // Inline restart.config imports into constants
-                  if (src && /restart\.config(\.(t|j)sx?)?$/.test(src)) {
+                  if (src && /(^|\/)restart\.config(\.(t|j)sx?)?$/.test(src)) {
                     // collect local names
                     for (const s of p.node.specifiers) {
                       if (t.isImportSpecifier(s)) {
@@ -210,21 +199,6 @@ function restartSecurityPluginFn(): BunPlugin {
                       return
                     }
 
-                    // Transform server function calls to stubs
-                    if (serverFunctionNames.has(callee.node.name)) {
-                      // Replace server function call with a stub that returns a placeholder
-                      const stubCall = t.callExpression(
-                        t.arrowFunctionExpression(
-                          [],
-                          t.stringLiteral("Server function not available in client")
-                        ),
-                        []
-                      )
-                      callPath.replaceWith(stubCall)
-                      transformedSomething = true
-                      return
-                    }
-
                     if (!serverFunctionLocalNames.has(callee.node.name)) return
 
                     const args = callPath.get("arguments")
@@ -294,30 +268,9 @@ function restartSecurityPluginFn(): BunPlugin {
                       p.remove()
                     }
                   }
-                  // Remove server functions (functions with "use server" directive)
-                  if (p.isFunctionDeclaration() && p.node.id) {
-                    const body = p.node.body
-                    if (body.body && Array.isArray(body.body) && body.body[0] && 
-                        t.isExpressionStatement(body.body[0]) && 
-                        t.isStringLiteral(body.body[0].expression) &&
-                        body.body[0].expression.value === 'use server') {
-                      p.remove()
-                    }
-                  }
                   if (middlewares && (p.isTSTypeAliasDeclaration() || p.isTSInterfaceDeclaration())) {
                     const name = p.node.id.name
                     if (name.includes("middleware") || name.includes("Middleware")) {
-                      p.remove()
-                    }
-                  }
-                  // Remove server function exports
-                  if (p.isExportNamedDeclaration() && p.node.declaration && p.node.declaration.type === "FunctionDeclaration") {
-                    const funcDecl = p.node.declaration
-                    const body = funcDecl.body
-                    if (body.body && Array.isArray(body.body) && body.body[0] && 
-                        t.isExpressionStatement(body.body[0]) && 
-                        t.isStringLiteral(body.body[0].expression) &&
-                        body.body[0].expression.value === 'use server') {
                       p.remove()
                     }
                   }
