@@ -14,6 +14,7 @@ import { registry } from "../shared/trpcRegistry"
 import { build, buildCss } from "../build"
 import { middlewares, type MiddlewareContext } from "./middlewares"
 import { renderToReadableStream } from "react-dom/server"
+import { existsSync } from "node:fs"
 
 // tRPC section
 
@@ -37,6 +38,31 @@ export function createAppRouter() {
 }
 
 export type AppRouter = ReturnType<typeof createAppRouter>
+
+async function serveStaticFile(
+  filename: string, 
+  contentType: string, 
+  ctx: MiddlewareContext,
+  searchPaths: string[] = ["dist/public", "public"]
+): Promise<Response | null> {
+  for (const searchPath of searchPaths) {
+    const filePath = `${searchPath}/${filename}`
+    if (existsSync(filePath)) {
+      const publicFile = file(filePath)
+      let res = new Response(publicFile, {
+        headers: { "Content-Type": contentType }
+      })
+      
+      for (const m of middlewares) {
+        if (m.onResponse) {
+          res = await m.onResponse(ctx, res)
+        }
+      }
+      return res
+    }
+  }
+  return null
+}
 
 // server section
 
@@ -368,80 +394,26 @@ if (import.meta.main) { // it stop the server to run if we import `Body()`
         }
       }
 
-      if (path.endsWith(".html")) {
-        const Filepath = path.split("/").pop()
-        const publicFile = file("dist/" + Filepath)
-        let res = new Response(publicFile, {
-          headers: { "Content-Type": "text/html"}
-        })
-        for (const m of middlewares) {
-          if (m.onResponse) {
-            res = await m.onResponse(ctx, res)
-          }
-        }
-        return res
-      }
-      
-      if (path.endsWith(".txt")) {
-        const Filepath = path.split("/").pop()
-        const publicFile = file("public/" + Filepath)
-        let res = new Response(publicFile, {
-          headers: { "Content-Type": "text/plain"}
-        })
-        for (const m of middlewares) {
-          if (m.onResponse) {
-            res = await m.onResponse(ctx, res)
-          }
-        }
-        return res
-      }
+      const fileExtensions = [
+        { ext: ".html", contentType: "text/html", searchPaths: ["dist", "public"] },
+        { ext: ".txt", contentType: "text/plain", searchPaths: ["public", "dist"] },
+        { ext: ".css", contentType: "text/css", searchPaths: ["dist", "public"] },
+        { ext: ".svg", contentType: "image/svg+xml", searchPaths: ["dist/public", "public"] },
+        { ext: ".js", contentType: "application/javascript", searchPaths: ["dist", "public"] }
+      ]
 
-      if (path.endsWith(".css")) {
-        const Filepath = path.split("/").pop()
-        const publicFile = file("dist/" + Filepath)
-        let res = new Response(publicFile, {
-          headers: { "Content-Type": "text/css"}
-        })
-        for (const m of middlewares) {
-          if (m.onResponse) {
-            res = await m.onResponse(ctx, res)
+      for (const { ext, contentType, searchPaths } of fileExtensions) {
+        if (path.endsWith(ext)) {
+          const filename = path.split("/").pop()
+          if (filename) {
+            const response = await serveStaticFile(filename, contentType, ctx, searchPaths)
+            if (response) {
+              return response
+            }
           }
+          break
         }
-        return res
       }
-
-      if (path.endsWith(".svg")) {
-        const Filepath = path.split("/").pop()
-        const publicFile = file("dist/public/" + Filepath)
-        let res = new Response(publicFile, {
-          headers: { "Content-Type": "image/svg+xml"}
-        })
-        for (const m of middlewares) {
-          if (m.onResponse) {
-            res = await m.onResponse(ctx, res)
-          }
-        }
-        return res
-      }
-
-      if (path.endsWith(".js")) {
-        const Filepath = path.split("/").pop()
-        const publicFile = file("dist/" + Filepath)
-        let res = new Response(publicFile, {
-          headers: { "Content-Type": "application/javascript"}
-        })
-        for (const m of middlewares) {
-          if (m.onResponse) {
-            res = await m.onResponse(ctx, res)
-          }
-        }
-        return res
-      }
-
-      if (path) {
-        
-      }
-
       
       let res = new Response("Page not found (404)", { status: 404 })
       for (const m of middlewares) {

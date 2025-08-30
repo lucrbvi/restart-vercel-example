@@ -15,7 +15,7 @@ function BodyHTML(props: { children: React.ReactNode }) {
 				<meta name="viewport" content="width=device-width, initial-scale=1" />
 				<title>Restart</title>
 				<link rel="stylesheet" href="/styles.css" />
-				<link rel="icon" type="image/svg+xml" href="/react.svg"></link>
+				<link rel="icon" type="image/svg+xml" href="public/react.svg"></link>
 				{restartConfig.useReactScan && process.env.NODE_ENV === "development" && (
 					// include react-scan in dev mode only if it's enabled in the config
 					<script crossOrigin="anonymous" src="//unpkg.com/react-scan/dist/auto.global.js"></script>

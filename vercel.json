@@ -7,8 +7,7 @@
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index.tsx" },
-    { "source": "/(.*)", "destination": "/api/index.tsx" }
+    { "source": "/api/(.*)", "destination": "/api/index.tsx" }
   ],
   "outputDirectory": "dist",
   "buildCommand": "bun run build",
