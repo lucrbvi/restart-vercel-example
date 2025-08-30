@@ -22,8 +22,8 @@ export const middlewares: Middleware[] = []
  * @param onResponse The function to run on the response.
  * @returns
  */
-export function newMiddleware(onRequest?: Middleware["onRequest"], onResponse?: Middleware["onResponse"]): Middleware {
-  const middleware = { onRequest, onResponse }
+export function newMiddleware(json: {onRequest?: Middleware["onRequest"], onResponse?: Middleware["onResponse"]}): Middleware {
+  const middleware = json as Middleware;
   middlewares.push(middleware)
   return middleware
 }

@@ -10,6 +10,7 @@
     "prod": "bun run ./server/index.tsx"
   },
   "dependencies": {
+    "@libsql/client": "^0.15.14",
     "babel-plugin-react-compiler": "^19.1.0-rc.2",
     "bun-plugin-tailwind": "^0.0.15",
     "react": "^19",

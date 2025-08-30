@@ -257,6 +257,32 @@ export const server = function(){return serve({
         }
       }
 
+      async function importRouteModule(routeName: string) {
+        let routeModule
+        
+        try {
+          routeModule = await import(`../dist/routes/${routeName}.js`)
+        } catch {
+          try {
+            routeModule = await import(`../dist/routes/${routeName}/index.js`)
+          } catch {
+            const routeParts = routeName.split('/')
+            const lastPart = routeParts[routeParts.length - 1]
+            
+            if (!isNaN(Number(lastPart))) {
+              const dynamicRouteName = routeParts.slice(0, -1).join('/') + '/[id]'
+              try {
+                routeModule = await import(`../dist/routes/${dynamicRouteName}.js`)
+              } catch {
+                routeModule = await import(`../dist/routes/${dynamicRouteName}/index.js`)
+              }
+            }
+          }
+        }
+        
+        return routeModule
+      }
+
       // check available routes from app/routes
       function computeKnownRoutes(): string[] {
         const cwd = process.cwd().replace(/\\/g, "/")
@@ -273,6 +299,9 @@ export const server = function(){return serve({
           let route = rel.replace(/\.tsx$/, "")
           if (route === "/index") route = "/"
           else if (route.endsWith("/index")) route = route.slice(0, -("/index".length))
+          
+          route = route.replace(/\[([^\]]+)\]/g, ':$1')
+          
           result.push(route)
         }
         
@@ -295,7 +324,24 @@ export const server = function(){return serve({
       }
 
       const knownRoutes = isDevMode ? computeKnownRoutes() : (globalThis as any).__KNOWN_ROUTES__ ?? ((globalThis as any).__KNOWN_ROUTES__ = computeKnownRoutes())
-      const isKnownClientRoute = knownRoutes.includes(path)
+
+      const isKnownClientRoute = knownRoutes.some((route: string) => {
+        if (route === path) return true
+        
+        if (route.includes(':')) {
+          const routeParts = route.split('/')
+          const pathParts = path.split('/')
+          
+          if (routeParts.length !== pathParts.length) return false
+          
+          return routeParts.every((part: string, index: number) => {
+            if (part.startsWith(':')) return true
+            return part === pathParts[index]
+          })
+        }
+        
+        return false
+      })
 
       if (path === "/" || isKnownClientRoute) {
         try {
@@ -303,15 +349,7 @@ export const server = function(){return serve({
             // In static mode, still generate content per route for RSC
             if (restartConfig.useReactServerComponents) {
               const routeName = path.slice(1) || "index"
-              
-              // Try to import as a file first, then as a directory with index.js
-              let routeModule
-              try {
-                routeModule = await import(`../dist/routes/${routeName}.js`)
-              } catch {
-                // If file doesn't exist, try as directory with index.js
-                routeModule = await import(`../dist/routes/${routeName}/index.js`)
-              }
+              const routeModule = await importRouteModule(routeName)
               
               const { default: PageComponent } = routeModule
               const { Body } = await import("app/App")
@@ -362,15 +400,7 @@ export const server = function(){return serve({
             try {
               const routeName = path.slice(1) || "index"
               await build()
-              
-              // Try to import as a file first, then as a directory with index.js
-              let routeModule
-              try {
-                routeModule = await import(`../dist/routes/${routeName}.js`)
-              } catch {
-                // If file doesn't exist, try as directory with index.js
-                routeModule = await import(`../dist/routes/${routeName}/index.js`)
-              }
+              const routeModule = await importRouteModule(routeName)
               
               const { default: PageComponent } = routeModule
               
