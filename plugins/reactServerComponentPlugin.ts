@@ -137,6 +137,22 @@ function reactServerComponentPluginFn(mode: 'server' | 'client'): BunPlugin {
             visitor: {
               Program: {
                 enter(path: any) {
+                  // Remove server imports and restart.config imports in client mode
+                  if (mode === 'client') {
+                    path.traverse({
+                      ImportDeclaration(importPath: any) {
+                        const source = importPath.node.source.value
+                        if (source.includes('/server/') || 
+                            source.includes('app/') || 
+                            source.includes('restart.config') ||
+                            source.includes('../restart.config') ||
+                            source.includes('./restart.config')) {
+                          importPath.remove()
+                        }
+                      }
+                    })
+                  }
+                  
                   // Collect local client components via AST (functions and arrow functions)
                   path.traverse({
                     FunctionDeclaration(innerPath: any) {
