@@ -1,6 +1,5 @@
 import { restartConfig } from "restart.config"
 import { Router } from "./router"
-import { SpeedInsights } from "@vercel/speed-insights/next"
 
 export function App() {
 	return (
@@ -27,7 +26,6 @@ function BodyHTML(props: { children: React.ReactNode }) {
 					{props.children}
 				</div>
 				<script type="module" src="/entrypoint.js" crossOrigin="anonymous"></script>
-				<SpeedInsights />
 			</body>
 		</html>
 	)

@@ -4,7 +4,7 @@ import { publicProcedure, router } from './trpc'
 import { restartConfig } from "../restart.config"
 import { registry } from "../shared/trpcRegistry"
 import { build, buildCss } from "../build"
-import { fetchHandler } from "./handler"
+import fetchHandler from "./handler.tsx"
 
 // tRPC section
 
