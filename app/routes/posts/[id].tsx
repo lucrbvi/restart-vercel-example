@@ -1,4 +1,14 @@
 import { getPost } from "app/server/index";
+import { Link } from "wouter";
+
+function HomeLink() {
+  "use client";
+  return (
+    <Link to="/" className="text-blue-400 hover:text-blue-300 mt-4 inline-block">
+      ← Back to home
+    </Link>
+  );
+}
 
 export default async function PostPage() {
   const path = (globalThis as any).__SSR_PATH__ || '/';
@@ -30,9 +40,7 @@ export default async function PostPage() {
         <br />
         <div className="text-lg mb-4">{post.content}</div>
         <br />
-        <a href="/" className="text-blue-400 hover:text-blue-300 mt-4 inline-block">
-          ← Back to home
-        </a>
+        <HomeLink />
       </div>
     </div>
   );

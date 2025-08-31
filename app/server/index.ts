@@ -13,14 +13,23 @@ export type Post = {
 }
 
 export async function getPosts(): Promise<Post[]> {
-    const result = await db.execute("SELECT * FROM posts");
-    
-    return result.rows.map((row) => ({
-        id: row.id as number,
-        title: row.title as string,
-        content: row.content as string,
-        metadata: JSON.parse(row.metadata as string),
-    }));
+    try {
+        const result = await db.execute("SELECT * FROM posts");
+        
+        if (result.rows.length === 0) {
+            return [];
+        }
+        
+        return result.rows.map((row) => ({
+            id: row.id as number,
+            title: row.title as string,
+            content: row.content as string,
+            metadata: JSON.parse(row.metadata as string),
+        }));
+    } catch (error) {
+        console.error("Error fetching posts:", error);
+        return [];
+    }
 }
 
 export async function getPost(id: number): Promise<Post | null> {

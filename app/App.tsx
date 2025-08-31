@@ -1,5 +1,6 @@
 import { restartConfig } from "restart.config"
 import { Router } from "./router"
+import { Router as WouterRouter } from "wouter"
 
 export function App() {
 	return (
@@ -13,16 +14,18 @@ function BodyHTML(props: { children: React.ReactNode }) {
 			<head>
 				<meta charSet="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />
-				<title>Restart</title>
+				<title>Cool blog</title>
 				<link rel="stylesheet" href="/styles.css" />
-				<link rel="icon" type="image/svg+xml" href="/react.svg"></link>
+				<link rel="icon" type="image/svg+xml" href="/react.png"></link>
 				{restartConfig.useReactScan && process.env.NODE_ENV === "development" && (
-					// include react-scan in dev mode only if it's enabled in the config
 					<script crossOrigin="anonymous" src="//unpkg.com/react-scan/dist/auto.global.js"></script>
 				)}
 			</head>
 			<body>
-				<div id="root">
+				<div
+					id="root"
+					data-rsc={restartConfig.useReactServerComponents ? "1" : undefined}
+				>
 					{props.children}
 				</div>
 				<script type="module" src="/entrypoint.js" crossOrigin="anonymous"></script>

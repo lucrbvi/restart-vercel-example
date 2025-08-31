@@ -1,5 +1,14 @@
-import { getPosts } from "app/server/index";
+import { getPosts, type Post } from "app/server/index";
+import { Link } from "wouter";
 
+function PostLink({ post, to }: { post: Post, to: string }) {
+  "use client";
+  return (
+    <Link to={to} className="text-blue-400 hover:text-blue-300 text-xl font-semibold">
+      {post.title}
+    </Link>
+  )
+}
 
 export default async function Index() {
   const posts = await getPosts();
@@ -11,14 +20,9 @@ export default async function Index() {
       </div>
       <br />
       <div>
-        {posts.map((post) => (
+        {posts?.map((post) => (
           <div key={post.id} className="mb-4">
-            <a 
-              href={`/posts/${post.id}`}
-              className="text-blue-400 hover:text-blue-300 text-xl font-semibold"
-            >
-              {post.title}
-            </a>
+            <PostLink post={post} to={`/posts/${post.id}`} />
             <br />
           </div>
         ))}

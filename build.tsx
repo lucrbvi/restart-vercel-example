@@ -161,7 +161,7 @@ export async function build() {
 
   await Bun.build({
     entrypoints: ["./server/handler.tsx"],
-    outdir: "./api/_server",
+    outdir: outdirPath + "/api",
     target: "bun",
     format: "esm",
     minify: true,

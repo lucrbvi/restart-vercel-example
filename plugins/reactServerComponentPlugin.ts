@@ -254,6 +254,43 @@ function reactServerComponentPluginFn(mode: 'server' | 'client'): BunPlugin {
                       const mapped = clientComponentFileMap.get(componentName)
                       componentId = mapped ? `${mapped}:${componentName}` : componentName
                     }
+                    
+                    // Serialize props at SSR time: data-props={JSON.stringify({...originalProps})}
+                    const buildPropsObject = () => {
+                      const attrs = openingElement.attributes
+                      const propsEntries: any[] = []
+                      for (const attr of attrs) {
+                        if (t.isJSXAttribute(attr)) {
+                          const nameId = t.isJSXIdentifier(attr.name)
+                            ? attr.name.name
+                            : String((attr.name as any).name || 'prop')
+                          let valueExpr: any
+                          if (!attr.value) {
+                            // <Comp disabled />
+                            valueExpr = t.booleanLiteral(true)
+                          } else if (t.isStringLiteral(attr.value)) {
+                            valueExpr = t.stringLiteral(attr.value.value)
+                          } else if (t.isJSXExpressionContainer(attr.value)) {
+                            valueExpr = attr.value.expression as any
+                          } else {
+                            valueExpr = t.nullLiteral()
+                          }
+                          propsEntries.push(
+                            t.objectProperty(t.identifier(nameId), valueExpr)
+                          )
+                        } else if (t.isJSXSpreadAttribute(attr)) {
+                          propsEntries.push(t.spreadElement(attr.argument as any))
+                        }
+                      }
+                      return t.objectExpression(propsEntries)
+                    }
+
+                    const propsObject = buildPropsObject()
+                    const jsonStringifyCall = t.callExpression(
+                      t.memberExpression(t.identifier('JSON'), t.identifier('stringify')),
+                      [propsObject]
+                    )
+
                     const divElement = t.jsxElement(
                       t.jsxOpeningElement(
                         t.jsxIdentifier('div'),
@@ -261,7 +298,11 @@ function reactServerComponentPluginFn(mode: 'server' | 'client'): BunPlugin {
                           t.jsxAttribute(
                             t.jsxIdentifier('restart-react-client-component'),
                             t.stringLiteral(componentId)
-                          )
+                          ),
+                          t.jsxAttribute(
+                            t.jsxIdentifier('data-props'),
+                            t.jsxExpressionContainer(jsonStringifyCall)
+                          ),
                         ]
                       ),
                       t.jsxClosingElement(t.jsxIdentifier('div')),
