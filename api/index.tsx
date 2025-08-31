@@ -1,5 +1,19 @@
-import { fetchHandler } from '../dist/server/handler.js';
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { file } from "bun";
 
-export default (req: Request) => {
-  return fetchHandler(req, null as any);
-};
+export default async function handler(req: Request) {
+  const abs = path.join(process.cwd(), "dist", "server", "handler.js");
+  try {
+    const { fetchHandler } = await import(pathToFileURL(abs).href);
+    return fetchHandler(req, null as any);
+  } catch (e) {
+    console.error("Handler not found at", abs, e);
+    const indexPath = path.join(process.cwd(), "dist", "index.html");
+    const f = file(indexPath);
+    if (await f.exists()) {
+      return new Response(f, { headers: { "Content-Type": "text/html" } });
+    }
+    return new Response("Server Error: handler missing", { status: 500 });
+  }
+}
