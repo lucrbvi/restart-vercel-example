@@ -5,6 +5,7 @@ import { file } from "bun";
 import pathLib from "path";
 import { renderToReadableStream } from "react-dom/server";
 import { pathToFileURL } from "node:url";
+import { Body } from "../app/App";
 
 function getContentType(ext: string): string {
   const contentTypes: Record<string, string> = {
@@ -17,7 +18,6 @@ function getContentType(ext: string): string {
 
 export async function fetchHandler(req: Request, server: Server): Promise<Response> {
   const path = new URL(req.url).pathname;
-  const isDevMode = process.env.NODE_ENV === 'development';
 
   if (path !== "/") {
     const filePath = pathLib.join(process.cwd(), "dist", path);
@@ -44,7 +44,6 @@ export async function fetchHandler(req: Request, server: Server): Promise<Respon
     const routeModulePath = pathLib.join(process.cwd(), "dist", "routes", modulePath + ".js");
     const routeModule = await import(pathToFileURL(routeModulePath).href);
     const { default: PageComponent } = routeModule;
-    const { Body } = await import("../app/App");
 
     const stream = await renderToReadableStream(
       <Body><PageComponent /></Body>
@@ -55,18 +54,12 @@ export async function fetchHandler(req: Request, server: Server): Promise<Respon
       headers: { "Content-Type": "text/html" },
     });
 
-  } catch (e) {
+    } catch (e) {
     console.error(`SSR Error for path ${path}:`, e);
-    try {
-        const { Body, App } = await import("../app/App");
-        const stream = await renderToReadableStream(<Body><App /></Body>);
-        await (stream as any).allReady;
-        return new Response(stream, {
-            headers: { "Content-Type": "text/html" },
-        });
-    } catch (ssrError) {
-        console.error("Fallback SSR Error:", ssrError);
-        return new Response("Server Error", { status: 500 });
-    }
+    const indexPath = pathLib.join(process.cwd(), "dist", "index.html");
+    const indexFile = file(indexPath);
+    if (await indexFile.exists())
+      return new Response(indexFile, { headers: { "Content-Type": "text/html" } });
+    return new Response("Server Error", { status: 500 });
   }
 }

@@ -3,8 +3,7 @@
   "functions": {
     "api/index.tsx": {
       "runtime": "@godsreveal/vercel-bun@0.2.4",
-      "maxDuration": 30,
-      "includeFiles": "dist/**"
+      "maxDuration": 30
     }
   },
   "rewrites": [
@@ -13,7 +12,5 @@
   ],
   "buildCommand": "bun run build",
   "installCommand": "bun install",
-  "env": {
-    "NODE_ENV": "production"
-  }
+  "env": { "NODE_ENV": "production" }
 }

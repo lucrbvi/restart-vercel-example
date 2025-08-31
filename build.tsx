@@ -8,8 +8,9 @@ import { file, write } from "bun"
 import { renderToString } from 'react-dom/server'
 import { renderToReadableStream } from 'react-dom/server'
 import { restartConfig as originalRestartConfig } from "./restart.config"
-import { mkdir, readdir } from "node:fs/promises"
+import path from "node:path"
 import { existsSync } from "node:fs"
+import { mkdir, readdir, rm, cp } from "node:fs/promises";
 
 const isVercel = process.env.VERCEL === "1" || process.env.VERCEL_ENV
 
@@ -28,6 +29,22 @@ export async function buildCss(dev: boolean = false) {
   Bun.spawn(["bunx", "@tailwindcss/cli", "-i", stylesPath, "-o", outdirPath + "/styles.css", dev ? "--watch" : "--minify"], {
     stdio: ["inherit", "ignore", "ignore"],
   })
+}
+
+async function copyDir(src: string, dest: string) {
+  await rm(dest, { recursive: true, force: true });
+  await mkdir(dest, { recursive: true });
+  const entries = await readdir(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const s = path.join(src, entry.name);
+    const d = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      await copyDir(s, d);
+    } else {
+      await mkdir(path.dirname(d), { recursive: true });
+      await cp(s, d);
+    }
+  }
 }
 
 export async function build() {
@@ -144,17 +161,17 @@ export async function build() {
 
   await Bun.build({
     entrypoints: ["./server/handler.tsx"],
-    outdir: outdirPath + "/server",
+    outdir: "./api/_server",
     target: "bun",
     format: "esm",
     minify: true,
     packages: "bundle",
     define: {
-      "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "production"),
+      "process.env.NODE_ENV": JSON.stringify(
+        process.env.NODE_ENV || "production"
+      ),
     },
-  })
-  
-  return
+  });
 }
 
 // produce the client bundle

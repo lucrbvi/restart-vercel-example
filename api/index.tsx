@@ -1,19 +1,17 @@
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { file } from "bun";
+import { pathToFileURL, fileURLToPath } from "node:url";
 
 export default async function handler(req: Request) {
-  const abs = path.join(process.cwd(), "dist", "server", "handler.js");
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  const distRoot = path.join(thisDir, "..", "dist");
+  const handlerPath = path.join(thisDir, "..", "server", "handler.js");
+
   try {
-    const { fetchHandler } = await import(pathToFileURL(abs).href);
+    const { fetchHandler } = await import(pathToFileURL(handlerPath).href);
     return fetchHandler(req, null as any);
   } catch (e) {
-    console.error("Handler not found at", abs, e);
-    const indexPath = path.join(process.cwd(), "dist", "index.html");
-    const f = file(indexPath);
-    if (await f.exists()) {
-      return new Response(f, { headers: { "Content-Type": "text/html" } });
-    }
+    console.error("Handler load failed", { handlerPath, distRoot }, e);
     return new Response("Server Error: handler missing", { status: 500 });
   }
 }
