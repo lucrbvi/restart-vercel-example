@@ -44,7 +44,7 @@ export async function fetchHandler(req: Request, server: Server): Promise<Respon
     const routeModulePath = pathLib.join(process.cwd(), "dist", "routes", modulePath + ".js");
     const routeModule = await import(pathToFileURL(routeModulePath).href);
     const { default: PageComponent } = routeModule;
-    const { Body } = await import("../app/App");
+    const { Body } = await import(pathToFileURL(pathLib.join(process.cwd(), "dist", "app", "App.js")).href);
 
     const stream = await renderToReadableStream(
       <Body><PageComponent /></Body>
@@ -57,16 +57,9 @@ export async function fetchHandler(req: Request, server: Server): Promise<Respon
 
   } catch (e) {
     console.error(`SSR Error for path ${path}:`, e);
-    try {
-        const { Body, App } = await import("../app/App");
-        const stream = await renderToReadableStream(<Body><App /></Body>);
-        await (stream as any).allReady;
-        return new Response(stream, {
-            headers: { "Content-Type": "text/html" },
-        });
-    } catch (ssrError) {
-        console.error("Fallback SSR Error:", ssrError);
-        return new Response("Server Error", { status: 500 });
-    }
+    const indexPath = pathLib.join(process.cwd(), "dist", "index.html");
+    const indexFile = file(indexPath);
+    if (await indexFile.exists()) return new Response(indexFile, { headers: { "Content-Type": "text/html" } });
+    return new Response("Server Error", { status: 500 });
   }
 }

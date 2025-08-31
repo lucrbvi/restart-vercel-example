@@ -110,24 +110,12 @@ export async function build() {
         plugins: [reactServerComponentPluginServer],
         target: 'bun',
         format: 'esm',
-        minify: false,
-        packages: "bundle",
-        define: {
-          "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "production"),
-        },
-      })
-      
-      await Bun.build({
-        entrypoints: ["./server/handler.tsx"],
-        outdir: outdirPath + "/server",
-        target: "bun",
-        format: "esm",
         minify: true,
         packages: "bundle",
         define: {
           "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "production"),
         },
-      });
+      })
     }
   }
   
@@ -146,12 +134,26 @@ export async function build() {
       plugins: [reactServerComponentPluginServer],
       target: 'bun',
       format: 'esm',
-      minify: false,
+      minify: true,
+      packages: "bundle",
       define: {
         "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "production"),
       },
     })
   }
+
+  await Bun.build({
+    entrypoints: ["./server/handler.tsx"],
+    outdir: outdirPath + "/server",
+    target: "bun",
+    format: "esm",
+    minify: true,
+    packages: "bundle",
+    define: {
+      "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "production"),
+    },
+  })
+  
   return
 }
 
