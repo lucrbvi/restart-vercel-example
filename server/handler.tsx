@@ -19,10 +19,6 @@ export async function fetchHandler(req: Request, server: Server): Promise<Respon
   const path = new URL(req.url).pathname;
   const isDevMode = process.env.NODE_ENV === 'development';
 
-  if (path.startsWith('/.well-known/'))  {
-    return new Response("Not Found", { status: 404 });
-  }
-
   if (path !== "/") {
     const filePath = pathLib.join(process.cwd(), "dist", path);
     const staticFile = file(filePath);
