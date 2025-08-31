@@ -1,65 +1,19 @@
-// Handler for serverless functions
-
-import type { Server } from "bun";
-import { file } from "bun";
-import pathLib from "path";
-import { renderToReadableStream } from "react-dom/server";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { file } from "bun";
 
-function getContentType(ext: string): string {
-  const contentTypes: Record<string, string> = {
-    '.html': 'text/html',
-    '.css': 'text/css',
-    '.js': 'application/javascript',
-  };
-  return contentTypes[ext] || 'application/octet-stream';
-}
-
-export async function fetchHandler(req: Request, server: Server): Promise<Response> {
-  const path = new URL(req.url).pathname;
-  const isDevMode = process.env.NODE_ENV === 'development';
-
-  if (path !== "/") {
-    const filePath = pathLib.join(process.cwd(), "dist", path);
-    const staticFile = file(filePath);
-    if (await staticFile.exists()) {
-      const ext = pathLib.extname(path).toLowerCase();
-      const contentType = getContentType(ext);
-      return new Response(staticFile, {
-        headers: { "Content-Type": contentType },
-      });
-    }
-  }
-
+export default async function handler(req: Request) {
+  const abs = path.join(process.cwd(), "dist", "server", "handler.js");
   try {
-    (globalThis as any).__SSR_PATH__ = path;
-    const routeName = path.slice(1) || "index";
-    
-    const routeParts = routeName.split('/');
-    let modulePath = routeName;
-    if (routeParts[0] === 'posts' && !isNaN(Number(routeParts[1]))) {
-        modulePath = 'posts/[id]';
-    }
-
-    const routeModulePath = pathLib.join(process.cwd(), "dist", "routes", modulePath + ".js");
-    const routeModule = await import(pathToFileURL(routeModulePath).href);
-    const { default: PageComponent } = routeModule;
-    const { Body } = await import(pathToFileURL(pathLib.join(process.cwd(), "dist", "app", "App.js")).href);
-
-    const stream = await renderToReadableStream(
-      <Body><PageComponent /></Body>
-    );
-    await (stream as any).allReady;
-
-    return new Response(stream, {
-      headers: { "Content-Type": "text/html" },
-    });
-
+    const { fetchHandler } = await import(pathToFileURL(abs).href);
+    return fetchHandler(req, null as any);
   } catch (e) {
-    console.error(`SSR Error for path ${path}:`, e);
-    const indexPath = pathLib.join(process.cwd(), "dist", "index.html");
-    const indexFile = file(indexPath);
-    if (await indexFile.exists()) return new Response(indexFile, { headers: { "Content-Type": "text/html" } });
-    return new Response("Server Error", { status: 500 });
+    console.error("Failed to load dist/server/handler.js at", abs, e);
+    const indexPath = path.join(process.cwd(), "dist", "index.html");
+    const f = file(indexPath);
+    if (await f.exists()) {
+      return new Response(f, { headers: { "Content-Type": "text/html" } });
+    }
+    return new Response("Server Error: handler missing", { status: 500 });
   }
 }

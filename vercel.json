@@ -4,14 +4,13 @@
     "api/index.tsx": {
       "runtime": "@godsreveal/vercel-bun@0.2.4",
       "maxDuration": 30,
-      "includeFiles": "dist/**"
+      "includeFiles": ["dist/**"]
     }
   },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.tsx" },
     { "source": "/(.*)", "destination": "/api/index.tsx" }
   ],
-  "outputDirectory": "dist",
   "buildCommand": "bun run build",
   "installCommand": "bun install",
   "env": {
