@@ -42,7 +42,6 @@ async function hydrateIslandsIn(container: ParentNode = document) {
   ))
   for (const slot of clientSlots) {
     const el = slot as HTMLElement
-    // Si déjà hydraté, on saute
     if (islandRoots.has(el)) continue
     const componentId = el.getAttribute("restart-react-client-component")
     if (!componentId) continue
@@ -81,7 +80,6 @@ async function rscNavigate(
   const root = document.getElementById("root")
   if (!root) return
 
-  // Démonter les îlots existants pour éviter les fuites
   const oldSlots = root.querySelectorAll("[restart-react-client-component]")
   oldSlots.forEach((slot) => {
     const rootInstance = islandRoots.get(slot as Element)
@@ -114,30 +112,24 @@ async function rscNavigate(
     const doc = parser.parseFromString(html, "text/html")
     const newRoot = doc.getElementById("root")
     if (!newRoot) {
-      // Fallback si structure inattendue
       window.location.href = url
       return
     }
 
-    // Met à jour le titre
     if (doc.title) {
       document.title = doc.title
     }
 
-    // Remplace le contenu de #root (on ne réexécute pas entrypoint.js)
     root.innerHTML = newRoot.innerHTML
 
-    // Met à jour l'historique
     if (opts.replace) {
       history.replaceState({}, "", url)
     } else {
       history.pushState({}, "", url)
     }
 
-    // Réhydrater les îlots de la nouvelle page
     await hydrateIslandsIn(root)
 
-    // Optionnel: scroll en haut
     window.scrollTo(0, 0)
   } catch (e) {
     console.error("Soft navigation failed; doing hard reload.", e)
@@ -215,7 +207,6 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
                   createRoot(rootElement).render(app)
                 }
             } else {
-                // RSC mode: hydrate islands and enable soft navigation
                 hydrateIslandsIn()
                 enableRscNavigation()
             }

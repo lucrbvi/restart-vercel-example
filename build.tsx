@@ -116,10 +116,17 @@ export async function build() {
     const cwd = process.cwd().replace(/\\/g, "/")
     const glob = new Bun.Glob(cwd + "/app/routes/**/*.tsx")
     const routeEntryPoints: string[] = []
+    const routeManifest: Record<string, string> = {}
+    
     for (const match of glob.scanSync({ cwd })) {
       const abs = match.startsWith("/") ? match : `${cwd}/${match}`
       routeEntryPoints.push(abs)
+      
+      const relativePath = match.replace(cwd + "/app/routes/", '').replace(/\.tsx$/, '')
+      const distPath = `./routes/${relativePath}.js`
+      routeManifest[relativePath] = distPath
     }
+    
     if (routeEntryPoints.length > 0) {
       await Bun.build({
         entrypoints: routeEntryPoints,
@@ -133,6 +140,21 @@ export async function build() {
           "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "production"),
         },
       })
+      
+      if (process.env.NODE_ENV === "production") {
+        const manifestContent = `
+export const routes = {
+${Object.entries(routeManifest)
+  .map(([routePath, distPath]) => `  "${routePath}": () => import("${distPath}"),`)
+  .join('\n')}
+};
+
+export function getRoute(routePath) {
+  return routes[routePath];
+}
+`
+        await write(outdirPath + "/routes.manifest.js", manifestContent)
+      }
     }
   }
   

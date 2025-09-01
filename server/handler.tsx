@@ -8,6 +8,15 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { Body } from "../app/App";
 
+let routesManifest: any = null;
+try {
+  routesManifest = await import("../dist/routes.manifest.js");
+} catch (e) {
+  if (process.env.NODE_ENV !== "development") {
+    console.warn("Routes manifest not found, falling back to dynamic imports");
+  }
+}
+
 function getContentType(ext: string): string {
   const contentTypes: Record<string, string> = {
     '.html': 'text/html',
@@ -68,9 +77,21 @@ export async function fetchHandler(req: Request, server: Server): Promise<Respon
         modulePath = 'posts/[id]';
     }
 
-    const routeModulePath = pathLib.join(distRoot, "routes", modulePath + ".js");
-    const routeModule = await import(pathToFileURL(routeModulePath).href);
-    const { default: PageComponent } = routeModule;
+    let PageComponent: any;
+    
+    if (routesManifest && routesManifest.getRoute) {
+      const routeLoader = routesManifest.getRoute(modulePath);
+      if (routeLoader) {
+        const routeModule = await routeLoader();
+        PageComponent = routeModule.default;
+      } else {
+        throw new Error(`Route not found in manifest: ${modulePath}`);
+      }
+    } else {
+      const routeModulePath = pathLib.join(distRoot, "routes", modulePath + ".js");
+      const routeModule = await import(pathToFileURL(routeModulePath).href);
+      PageComponent = routeModule.default;
+    }
 
     const stream = await renderToReadableStream(
       <Body><PageComponent /></Body>
@@ -81,7 +102,7 @@ export async function fetchHandler(req: Request, server: Server): Promise<Respon
         "Content-Type": "text/html",
         "CDN-Cache-Control": "max-age=300, stale-while-revalidate=86400",
         "Vercel-CDN-Cache-Control": "max-age=300",
-        "Cache-Control": "public, max-age=0, must-revalidate"
+        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600"
         }
     });
 

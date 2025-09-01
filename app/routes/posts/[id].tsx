@@ -26,11 +26,9 @@ export default async function PostPage() {
   return (
     <div className="bg-neutral-900 text-white flex flex-col items-center justify-center h-screen">
       <div className="max-w-4xl mx-auto p-8">
-        <h1 className="text-4xl font-bold mb-4">{post.title}</h1>
-        <br />
-        <div className="text-lg mb-4">{post.content}</div>
-        <br />
-        <a href="/" className="text-blue-400 hover:text-blue-300 mt-4 inline-block">
+        <h1 className="text-4xl font-bold mb-8">{post.title}</h1>
+        <div className="text-lg mb-8">{post.content}</div>
+        <a href="/" className="text-blue-400 hover:text-blue-300 mt-8 inline-block">
           ← Back to home
         </a>
       </div>
