@@ -8,7 +8,19 @@
   },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.tsx" },
+    { "source": "/trpc/(.*)", "destination": "/api/index.tsx" },
+
+    { "source": "/(.*\\.(?:js|css|map|png|jpg|jpeg|gif|webp|svg|ico))", "destination": "/dist/$1" },
+
     { "source": "/(.*)", "destination": "/api/index.tsx" }
+  ],
+  "headers": [
+    {
+      "source": "/dist/(.*\\.(?:js|css|map|png|jpg|jpeg|gif|webp|svg|ico))",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
   ],
   "buildCommand": "bun run build",
   "installCommand": "bun install",

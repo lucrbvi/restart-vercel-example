@@ -91,20 +91,25 @@ async function rscNavigate(
   })
 
   try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        // permet de détecter requêtes client si plus tard on veut renvoyer un fragment
-        "X-Requested-With": "restart-rsc",
-      },
-      credentials: "same-origin",
-    })
-    if (!res.ok) {
-      // Fallback: navigation dure
-      window.location.href = url
-      return
+    let html: string;
+    
+    if (prefetchCache.has(url)) {
+      html = prefetchCache.get(url)!;
+      prefetchCache.delete(url);
+    } else {
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          "X-Requested-With": "restart-rsc",
+        },
+        credentials: "same-origin",
+      })
+      if (!res.ok) {
+        window.location.href = url
+        return
+      }
+      html = await res.text()
     }
-    const html = await res.text()
     const parser = new DOMParser()
     const doc = parser.parseFromString(html, "text/html")
     const newRoot = doc.getElementById("root")
@@ -221,3 +226,46 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
         console.error("Hydration error:", e)
     }
 }
+
+const prefetchCache = new Map<string, string>();
+
+function prefetch(url: string) {
+  if (prefetchCache.has(url)) {
+    return;
+  }
+  
+  fetch(url, {
+    headers: { "X-Requested-With": "restart-prefetch" },
+    cache: "no-cache",
+    credentials: "same-origin"
+  })
+  .then(res => {
+    if (res.ok) {
+      return res.text();
+    }
+    throw new Error('Prefetch failed');
+  })
+  .then(html => {
+    prefetchCache.set(url, html);
+  })
+  .catch(() => {
+    prefetchCache.delete(url);
+  });
+}
+
+document.addEventListener("mouseover", (e) => {
+  const a = (function findAnchor(el: EventTarget | null): HTMLAnchorElement | null {
+    let node = el as HTMLElement | null;
+    while (node && node !== document.body) {
+      if (node instanceof HTMLAnchorElement) return node;
+      node = node.parentElement;
+    }
+    return null;
+  })(e.target);
+  if (!a) return;
+  const href = a.getAttribute("href");
+  if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) return;
+  const url = new URL(href, location.href);
+  if (url.origin !== location.origin) return;
+  prefetch(url.pathname + url.search + url.hash);
+});

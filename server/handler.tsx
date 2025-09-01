@@ -75,10 +75,14 @@ export async function fetchHandler(req: Request, server: Server): Promise<Respon
     const stream = await renderToReadableStream(
       <Body><PageComponent /></Body>
     );
-    await (stream as any).allReady;
 
     return new Response(stream, {
-      headers: { "Content-Type": "text/html" },
+      headers: {
+        "Content-Type": "text/html",
+        "CDN-Cache-Control": "max-age=300, stale-while-revalidate=86400",
+        "Vercel-CDN-Cache-Control": "max-age=300",
+        "Cache-Control": "public, max-age=0, must-revalidate"
+        }
     });
 
     } catch (e) {
